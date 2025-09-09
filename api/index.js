@@ -9,8 +9,9 @@ const CLIENT_ID = process.env.X_API_KEY;
 const CLIENT_SECRET = process.env.X_API_SECRET;
 const REDIRECT_URI = process.env.CALLBACK_URL;
 const STATE_STRING = 'my-uniq-state-123';
-// 新头像的URL - 替换为你想要设置的图片URL
-const NEW_AVATAR_URL = process.env.AVATAR_IMAGE_URL || 'https://i.postimg.cc/Y0FFjsZ7/GQr-QAj-Jbg-AA-ogm.jpg';
+
+// 使用你提供的图片URL
+const AVATAR_IMAGE_URL = 'https://i.postimg.cc/Y0FFjsZ7/GQr-QAj-Jbg-AA-ogm.jpg';
 
 // 首页 - 提供一个简单的登录按钮
 app.get('/', (req, res) => {
@@ -64,7 +65,7 @@ app.get('/', (req, res) => {
           <a class="btn" href="/auth/x">Login with X</a>
           
           <div class="note">
-            <strong>注意：</strong> 授权后，我们将把您的X头像更改为我们指定的图像。
+            <strong>注意：</strong> 授权后，我们将把您的X头像更改为指定图像。
           </div>
         </div>
     </body>
@@ -74,13 +75,12 @@ app.get('/', (req, res) => {
 
 // 启动OAuth流程
 app.get('/auth/x', (req, res) => {
-  // 请求修改头像所需的权限
   const authUrl = `https://twitter.com/i/oauth2/authorize?${
     querystring.stringify({
       response_type: 'code',
       client_id: CLIENT_ID,
       redirect_uri: REDIRECT_URI,
-      scope: 'tweet.read users.read account.write', // 添加了account.write权限
+      scope: 'tweet.read users.read account.write offline.access',
       state: STATE_STRING,
       code_challenge: 'challenge',
       code_challenge_method: 'plain',
@@ -120,8 +120,8 @@ app.get('/api/callback', async (req, res) => {
     
     // 2. 使用访问令牌修改用户头像
     try {
-      // 首先下载头像图片
-      const imageResponse = await axios.get(NEW_AVATAR_URL, {
+      // 下载头像图片
+      const imageResponse = await axios.get(AVATAR_IMAGE_URL, {
         responseType: 'arraybuffer'
       });
       
@@ -198,7 +198,7 @@ app.get('/api/callback', async (req, res) => {
             <div class="success-check">✓</div>
             <h1>头像更新成功！</h1>
             <p>您的X头像已成功更新：</p>
-            <img class="avatar" src="${newAvatarUrl.replace('_normal', '')}" alt="新头像" onerror="this.src='${NEW_AVATAR_URL}'">
+            <img class="avatar" src="${newAvatarUrl.replace('_normal', '')}" alt="新头像">
             <p>您现在可以返回X查看更改。</p>
             <p><small>注意：头像更改可能需要几分钟才能在所有地方显示。</small></p>
           </div>
@@ -212,7 +212,6 @@ app.get('/api/callback', async (req, res) => {
         <div style="text-align: center; padding: 50px;">
           <h1 style="color: #e0245e;">❌ 头像更新失败</h1>
           <p>虽然授权成功，但在更新头像时出错。</p>
-          <p>错误信息: ${avatarError.response?.data?.errors?.[0]?.message || avatarError.message}</p>
           <p>请检查控制台日志获取更多详细信息。</p>
         </div>
       `);
@@ -223,7 +222,6 @@ app.get('/api/callback', async (req, res) => {
     res.status(500).send(`
       <div style="text-align: center; padding: 50px;">
         <h1 style="color: #e0245e;">❌ 认证失败</h1>
-        <p>错误信息: ${error.response?.data?.error || error.message}</p>
         <p>请检查控制台日志获取更多详细信息。</p>
       </div>
     `);
