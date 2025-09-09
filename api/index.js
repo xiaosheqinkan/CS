@@ -49,3 +49,7 @@ app.get('/api/callback', (req, res) => {
 
 // 让服务器运行起来
 module.exports = app;
+// 添加这行代码，让Vercel能够正确启动你的应用
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
