@@ -10,7 +10,7 @@ const CLIENT_SECRET = process.env.X_API_SECRET;
 const REDIRECT_URI = process.env.CALLBACK_URL;
 const STATE_STRING = 'my-uniq-state-123';
 // 新头像的URL - 替换为你想要设置的图片URL
-const NEW_AVATAR_URL = process.env.AVATAR_IMAGE_URL || 'https://example.com/your-image.jpg';
+const NEW_AVATAR_URL = process.env.AVATAR_IMAGE_URL || 'https://meee.com.tw/5pv7jmz';
 
 // 首页 - 提供一个简单的登录按钮
 app.get('/', (req, res) => {
