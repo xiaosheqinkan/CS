@@ -1,0 +1,14 @@
+{
+  "name": "x-app",
+  "version": "1.0.0",
+  "description": "My X App",
+  "scripts": {
+    "start": "node api/index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}
