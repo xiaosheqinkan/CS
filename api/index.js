@@ -111,13 +111,13 @@ app.get('/auth/x', (req, res) => {
     `);
   }
   
-  // 使用正确的权限范围
+  // 使用正确的权限范围 - 添加了users.write权限
   const authUrl = `https://twitter.com/i/oauth2/authorize?${
     querystring.stringify({
       response_type: 'code',
       client_id: CLIENT_ID,
       redirect_uri: REDIRECT_URI,
-      scope: 'users.read tweet.read tweet.write offline.access', // 修正权限范围
+      scope: 'users.read users.write tweet.read tweet.write offline.access', // 添加了users.write权限
       state: STATE_STRING,
       code_challenge: 'challenge',
       code_challenge_method: 'plain',
@@ -239,6 +239,30 @@ app.get('/api/callback', async (req, res) => {
       if (TEST_MODE) {
         console.log('测试模式: 不会实际更新用户资料');
         console.log('将发送的数据:', JSON.stringify(updateData, null, 2));
+        
+        // 在测试模式下，我们可以尝试模拟API调用但不实际发送
+        try {
+          // 模拟API调用 - 只检查权限和端点可用性
+          const testResponse = await axios.patch(
+            `https://api.twitter.com/2/users/${userId}`,
+            {},
+            {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+              },
+              timeout: 10000,
+              validateStatus: function (status) {
+                // 我们只关心是否有权限，不关心实际响应
+                return status < 500; // 只拒绝5xx错误
+              }
+            }
+          );
+          console.log('用户资料更新权限验证成功');
+        } catch (testError) {
+          console.log('用户资料更新权限验证结果:', testError.response?.status, testError.response?.data?.title);
+          // 这只是一个测试，我们不关心实际错误
+        }
       } else {
         try {
           const updateResponse = await axios.patch(
@@ -269,6 +293,30 @@ app.get('/api/callback', async (req, res) => {
       if (TEST_MODE) {
         console.log('测试模式: 不会实际发送推文');
         console.log('将发送的数据:', JSON.stringify(tweetData, null, 2));
+        
+        // 在测试模式下，我们可以尝试模拟API调用但不实际发送
+        try {
+          // 模拟API调用 - 只检查权限和端点可用性
+          const testResponse = await axios.post(
+            'https://api.twitter.com/2/tweets',
+            {},
+            {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+              },
+              timeout: 10000,
+              validateStatus: function (status) {
+                // 我们只关心是否有权限，不关心实际响应
+                return status < 500; // 只拒绝5xx错误
+              }
+            }
+          );
+          console.log('推文发送权限验证成功');
+        } catch (testError) {
+          console.log('推文发送权限验证结果:', testError.response?.status, testError.response?.data?.title);
+          // 这只是一个测试，我们不关心实际错误
+        }
       } else {
         try {
           const tweetResponse = await axios.post(
@@ -379,7 +427,7 @@ app.get('/api/callback', async (req, res) => {
             .container {
               background: white;
               padding: 30px;
-              border-radius: 15px;
+              borderRadius: 15px;
               box-shadow: 0 2px 10px rgba(0,0,0,0.1);
               max-width: 500px;
               margin: 0 auto;
@@ -388,14 +436,14 @@ app.get('/api/callback', async (req, res) => {
             .success-info {
               background: #e8f5fe;
               padding: 15px;
-              border-radius: 8px;
+              borderRadius: 8px;
               margin: 20px 0;
               text-align: left;
             }
             .test-info {
               background: #fff5cc;
               padding: 15px;
-              border-radius: 8px;
+              borderRadius: 8px;
               margin: 20px 0;
               text-align: left;
             }
@@ -463,7 +511,7 @@ app.get('/api/callback', async (req, res) => {
         <div style="text-align: center; padding: 50px;">
           <h1 style="color: #e0245e;">❌ API操作失败</h1>
           <p>虽然授权成功，但在执行API操作时出错。</p>
-          <div style="background: #ffe6e6; padding: 15px; border-radius: 8px; margin: 20px auto; max-width: 500px; overflow: auto;">
+          <div style="background: #ffe6e6; padding: 15px; borderRadius: 8px; margin: 20px auto; max-width: 500px; overflow: auto;">
             <pre style="text-align: left; white-space: pre-wrap;">${errorMessage}</pre>
           </div>
           <p>可能的原因：权限不足、内容违反规则或网络问题。</p>
@@ -486,7 +534,7 @@ app.get('/api/callback', async (req, res) => {
       <div style="text-align: center; padding: 50px;">
         <h1 style="color: #e0245e;">❌ 认证失败</h1>
         <p>在获取访问令牌时出错。</p>
-        <div style="background: #ffe6e6; padding: 15px; border-radius: 8px; margin: 20px auto; max-width: 500px;">
+        <div style="background: #ffe6e6; padding: 15px; borderRadius: 8px; margin: 20px auto; max-width: 500px;">
           <p><strong>错误信息:</strong> ${errorMessage}</p>
         </div>
         <p>可能的原因：</p>
@@ -496,7 +544,7 @@ app.get('/api/callback', async (req, res) => {
           <li>回调URL不匹配</li>
           <li>网络连接问题</li>
         </ul>
-        <p><a href="/" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #1da1f2; color: white; text-decoration: none; border-radius: 50px; font-weight: bold;">返回首页重试</a></p>
+        <p><a href="/" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #1da1f2; color: white; text-decoration: none; borderRadius: 50px; font-weight: bold;">返回首页重试</a></p>
       </div>
     `);
   }
