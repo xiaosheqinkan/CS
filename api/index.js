@@ -11,7 +11,7 @@ const CLIENT_SECRET = process.env.X_API_SECRET;
 const REDIRECT_URI = 'https://cs-seven-zeta.vercel.app/api/callback';
 const STATE_STRING = 'my-uniq-state-123';
 
-// 存储监控状态（简单实现，生产环境应使用数据库）
+// 存储监控状态
 let monitoringActive = false;
 let lastCheckedTweetId = null;
 let accessToken = null;
@@ -46,7 +46,7 @@ app.get('/', (req, res) => {
         </div>
 
         <div class="warning">
-          <h3⚠️ 注意：</h3>
+          <h3>⚠️ 注意：</h3>
           <p>这是一个真实操作，会实际修改您的 X 账户。</p>
           <p>请确保您了解此操作的后果。</p>
         </div>
@@ -65,12 +65,25 @@ app.get('/auth/x', (req, res) => {
     return res.status(500).send('服务器配置错误: 缺少 API 密钥或密钥秘密');
   }
   
-  // 构建授权 URL - 需要更多权限
+  // 定义权限范围
+  const scopes = [
+    'users.read',
+    'users.write',
+    'tweet.read', 
+    'tweet.write',
+    'follows.read',
+    'follows.write',
+    'like.read',
+    'like.write',
+    'offline.access'
+  ].join(' ');
+  
+  // 构建授权 URL
   const authUrl = `https://twitter.com/i/oauth2/authorize?${querystring.stringify({
     response_type: 'code',
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
-    scope: 'users.read users.write tweet.read tweet.write follows.read follows.write like.read like.write offline.access',
+    scope: scopes,
     state: STATE_STRING,
     code_challenge: 'challenge',
     code_challenge_method: 'plain',
@@ -230,6 +243,27 @@ app.get('/api/callback', async (req, res) => {
         <h1 style="color: #e0245e;">❌ 授权失败</h1>
         <p><strong>错误类型:</strong> ${error}</p>
         <p><strong>详细描述:</strong> ${error_description || '无详细描述'}</p>
+        ${error === 'invalid_scope' ? `
+          <div style="background: #fff4f4; padding: 15px; border-radius: 8px; margin: 20px;">
+            <h3>invalid_scope 错误解决方案：</h3>
+            <ol style="text-align: left;">
+              <li>登录 <a href="https://developer.twitter.com" target="_blank">X Developer Portal</a></li>
+              <li>进入您的应用设置</li>
+              <li>在 "User authentication settings" 中确保已启用以下权限：
+                <ul>
+                  <li>Read users (users.read)</li>
+                  <li>Edit users (users.write)</li>
+                  <li>Read tweets (tweet.read)</li>
+                  <li>Write tweets (tweet.write)</li>
+                  <li>Follow and unfollow users (follows.read, follows.write)</li>
+                  <li>Like and unlike tweets (like.read, like.write)</li>
+                  <li>Access to offline information (offline.access)</li>
+                </ul>
+              </li>
+              <li>应用类型必须设置为 "Read and write"</li>
+            </ol>
+          </div>
+        ` : ''}
         <p><a href="/">返回首页重试</a></p>
       </div>
     `);
