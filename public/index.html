@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Twitter位置修改器</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Twitter位置修改器</h1>
+        <p>点击下方按钮授权并自动将你的Twitter位置更改为"你妈头上"</p>
+        <button id="authButton">授权Twitter并修改位置</button>
+        <div id="status"></div>
+    </div>
+    <script>
+        document.getElementById('authButton').addEventListener('click', function() {
+            window.location.href = '/api/auth';
+        });
+        
+        // 显示状态信息（如果有）
+        const urlParams = new URLSearchParams(window.location.search);
+        const status = urlParams.get('status');
+        const message = urlParams.get('message');
+        
+        if (status && message) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = status;
+            statusDiv.textContent = decodeURIComponent(message);
+        }
+    </script>
+</body>
+</html>
