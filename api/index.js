@@ -87,12 +87,13 @@ app.get('/auth/x', (req, res) => {
     `);
   }
   
+  // 使用正确的权限范围
   const authUrl = `https://twitter.com/i/oauth2/authorize?${
     querystring.stringify({
       response_type: 'code',
       client_id: CLIENT_ID,
       redirect_uri: REDIRECT_URI,
-      scope: 'users.read users.write offline.access', // 修复了权限范围
+      scope: 'tweet.read users.read offline.access', // 使用正确的权限范围
       state: STATE_STRING,
       code_challenge: 'challenge',
       code_challenge_method: 'plain',
