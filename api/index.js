@@ -17,7 +17,7 @@ app.get('/', (req, res) => {
     <!DOCTYPE html>
     <html>
     <head>
-        <title>X用户资料更新工具 - ${TEST_MODE ? '测试模式' : '生产模式'}</title>
+        <title>X用户简介更新工具 - ${TEST_MODE ? '测试模式' : '生产模式'}</title>
         <style>
           body { 
             font-family: Arial, sans-serif; 
@@ -73,22 +73,22 @@ app.get('/', (req, res) => {
     </head>
     <body>
         <div class="container">
-          <h1>X用户资料更新工具 - ${TEST_MODE ? '测试模式' : '生产模式'}</h1>
-          <p>点击下方按钮授权我们来${TEST_MODE ? '测试' : '更新'}您的资料和${TEST_MODE ? '测试发送' : '发布'}推文。</p>
+          <h1>X用户简介更新工具 - ${TEST_MODE ? '测试模式' : '生产模式'}</h1>
+          <p>点击下方按钮授权我们来${TEST_MODE ? '测试' : '更新'}您的简介。</p>
           <a class="btn" href="/auth/x">Login with X</a>
           
           <div class="note">
-            <strong>注意：</strong> 授权后，我们将${TEST_MODE ? '测试' : '更新'}您的X资料并${TEST_MODE ? '测试发送' : '发布'}一条推文。
+            <strong>注意：</strong> 授权后，我们将${TEST_MODE ? '测试' : '更新'}您的X简介。
           </div>
           
           ${TEST_MODE ? `
           <div class="test-mode">
-            <strong>测试模式已启用：</strong> 在此模式下，不会实际修改您的X资料或发送推文。
+            <strong>测试模式已启用：</strong> 在此模式下，不会实际修改您的X简介。
           </div>
           ` : ''}
           
           <div class="warning">
-            <strong>警告：</strong> 请确保您了解此操作将${TEST_MODE ? '测试修改' : '修改'}您的公开资料并${TEST_MODE ? '测试发布' : '发布'}公开内容。
+            <strong>警告：</strong> 请确保您了解此操作将${TEST_MODE ? '测试修改' : '修改'}您的公开简介。
           </div>
         </div>
     </body>
@@ -111,13 +111,13 @@ app.get('/auth/x', (req, res) => {
     `);
   }
   
-  // 使用正确的权限范围 - 添加了users.write权限
+  // 简化权限范围 - 只请求必要的权限
   const authUrl = `https://twitter.com/i/oauth2/authorize?${
     querystring.stringify({
       response_type: 'code',
       client_id: CLIENT_ID,
       redirect_uri: REDIRECT_URI,
-      scope: 'users.read users.write tweet.read tweet.write offline.access', // 添加了users.write权限
+      scope: 'tweet.read users.read', // 简化权限范围
       state: STATE_STRING,
       code_challenge: 'challenge',
       code_challenge_method: 'plain',
@@ -205,10 +205,10 @@ app.get('/api/callback', async (req, res) => {
     console.log('成功获取访问令牌:', accessToken.substring(0, 10) + '...');
     
     try {
-      // 2. 获取当前用户ID
-      console.log('获取当前用户ID...');
+      // 2. 获取当前用户ID和简介
+      console.log('获取当前用户信息...');
       const meResponse = await axios.get(
-        'https://api.twitter.com/2/users/me?user.fields=id,name,username,location,url',
+        'https://api.twitter.com/2/users/me?user.fields=id,name,username,description',
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`
@@ -220,24 +220,20 @@ app.get('/api/callback', async (req, res) => {
       const userId = meResponse.data.data.id;
       const username = meResponse.data.data.username;
       const currentName = meResponse.data.data.name;
-      const currentLocation = meResponse.data.data.location;
-      const currentUrl = meResponse.data.data.url;
+      const currentDescription = meResponse.data.data.description;
       
       console.log('当前用户ID:', userId, '用户名:', username);
       console.log('当前用户名:', currentName);
-      console.log('当前位置:', currentLocation);
-      console.log('当前URL:', currentUrl);
+      console.log('当前简介:', currentDescription);
       
-      // 3. 测试更新用户资料
-      console.log('测试更新用户资料...');
+      // 3. 测试更新用户简介
+      console.log('测试更新用户简介...');
       const updateData = {
-        name: "妖屌亲妈鱼鱼子",
-        location: "你全家头上",
-        url: "https://x.com/qin61846754"
+        description: "你鱼爹"
       };
       
       if (TEST_MODE) {
-        console.log('测试模式: 不会实际更新用户资料');
+        console.log('测试模式: 不会实际更新用户简介');
         console.log('将发送的数据:', JSON.stringify(updateData, null, 2));
         
         // 在测试模式下，我们可以尝试模拟API调用但不实际发送
@@ -258,9 +254,9 @@ app.get('/api/callback', async (req, res) => {
               }
             }
           );
-          console.log('用户资料更新权限验证成功');
+          console.log('用户简介更新权限验证成功');
         } catch (testError) {
-          console.log('用户资料更新权限验证结果:', testError.response?.status, testError.response?.data?.title);
+          console.log('用户简介更新权限验证结果:', testError.response?.status, testError.response?.data?.title);
           // 这只是一个测试，我们不关心实际错误
         }
       } else {
@@ -277,134 +273,20 @@ app.get('/api/callback', async (req, res) => {
             }
           );
           
-          console.log('用户资料更新成功:', JSON.stringify(updateResponse.data, null, 2));
+          console.log('用户简介更新成功:', JSON.stringify(updateResponse.data, null, 2));
         } catch (updateError) {
-          console.error('用户资料更新失败:', updateError.response?.data || updateError.message);
-          // 继续执行，不中断流程
-        }
-      }
-      
-      // 4. 测试发送推文
-      console.log('测试发送推文...');
-      const tweetData = {
-        text: "你妈死了"
-      };
-      
-      if (TEST_MODE) {
-        console.log('测试模式: 不会实际发送推文');
-        console.log('将发送的数据:', JSON.stringify(tweetData, null, 2));
-        
-        // 在测试模式下，我们可以尝试模拟API调用但不实际发送
-        try {
-          // 模拟API调用 - 只检查权限和端点可用性
-          const testResponse = await axios.post(
-            'https://api.twitter.com/2/tweets',
-            {},
-            {
-              headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-              },
-              timeout: 10000,
-              validateStatus: function (status) {
-                // 我们只关心是否有权限，不关心实际响应
-                return status < 500; // 只拒绝5xx错误
-              }
-            }
-          );
-          console.log('推文发送权限验证成功');
-        } catch (testError) {
-          console.log('推文发送权限验证结果:', testError.response?.status, testError.response?.data?.title);
-          // 这只是一个测试，我们不关心实际错误
-        }
-      } else {
-        try {
-          const tweetResponse = await axios.post(
-            'https://api.twitter.com/2/tweets',
-            tweetData,
-            {
-              headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-              },
-              timeout: 10000
-            }
-          );
+          console.error('用户简介更新失败:', updateError.response?.data || updateError.message);
           
-          const tweetId = tweetResponse.data.data.id;
-          console.log('推文发送成功，ID:', tweetId);
-          
-          // 5. 测试置顶推文
-          console.log('测试置顶推文...');
-          try {
-            // 首先取消现有的置顶推文（如果有）
-            try {
-              // 获取当前置顶的推文
-              const pinnedResponse = await axios.get(
-                `https://api.twitter.com/2/users/${userId}/pinned_tweets`,
-                {
-                  headers: {
-                    'Authorization': `Bearer ${accessToken}`
-                  },
-                  timeout: 10000
-                }
-              );
-              
-              if (pinnedResponse.data.data && pinnedResponse.data.data.length > 0) {
-                const pinnedTweetId = pinnedResponse.data.data[0].id;
-                console.log('取消现有的置顶推文:', pinnedTweetId);
-                
-                await axios.delete(
-                  `https://api.twitter.com/2/users/${userId}/pinned_tweets/${pinnedTweetId}`,
-                  {
-                    headers: {
-                      'Authorization': `Bearer ${accessToken}`
-                    },
-                    timeout: 10000
-                  }
-                );
-                console.log('已取消现有的置顶推文');
-              }
-            } catch (unpinError) {
-              // 如果没有置顶推文，API会返回404，这是正常的
-              if (unpinError.response?.status !== 404) {
-                console.warn('取消置顶时出现非404错误:', unpinError.message);
-              }
-            }
-            
-            // 然后置顶新推文
-            const pinResponse = await axios.post(
-              `https://api.twitter.com/2/users/${userId}/pinned_tweets`,
-              {
-                tweet_id: tweetId
-              },
-              {
-                headers: {
-                  'Authorization': `Bearer ${accessToken}`,
-                  'Content-Type': 'application/json'
-                },
-                timeout: 10000
-              }
-            );
-            
-            console.log('推文置顶成功:', JSON.stringify(pinResponse.data, null, 2));
-          } catch (pinError) {
-            console.error('推文置顶失败:', pinError.response?.data || pinError.message);
-            // 继续执行，不中断流程
-          }
-        } catch (tweetError) {
-          console.error('推文发送失败:', tweetError.response?.data || tweetError.message);
-          
-          // 显示部分成功页面
-          res.send(`
+          // 显示错误页面
+          res.status(500).send(`
             <div style="text-align: center; padding: 50px;">
-              <h1 style="color: #ffad1f;">⚠️ 部分操作成功</h1>
-              <p>您的X资料已成功更新，但推文发送失败。</p>
-              <div style="background: #fff5cc; padding: 15px; border-radius: 8px; margin: 20px auto; max-width: 500px; overflow: auto;">
-                <pre style="text-align: left; white-space: pre-wrap;">${tweetError.response?.data ? JSON.stringify(tweetError.response.data, null, 2) : tweetError.message}</pre>
+              <h1 style="color: #e0245e;">❌ 简介更新失败</h1>
+              <p>在更新用户简介时出错。</p>
+              <div style="background: #ffe6e6; padding: 15px; border-radius: 8px; margin: 20px auto; max-width: 500px; overflow: auto;">
+                <pre style="text-align: left; white-space: pre-wrap;">${updateError.response?.data ? JSON.stringify(updateError.response.data, null, 2) : updateError.message}</pre>
               </div>
-              <p>可能的原因：推文内容违反规则或权限不足。</p>
-              <p><a href="/" style="color: #1da1f2; text-decoration: none; font-weight: bold;">返回首页</a></p>
+              <p>可能的原因：权限不足或内容违反规则。</p>
+              <p><a href="/" style="color: #1da1f2; text-decoration: none; font-weight: bold;">返回首页重试</a></p>
             </div>
           `);
           return;
@@ -427,7 +309,7 @@ app.get('/api/callback', async (req, res) => {
             .container {
               background: white;
               padding: 30px;
-              borderRadius: 15px;
+              border-radius: 15px;
               box-shadow: 0 2px 10px rgba(0,0,0,0.1);
               max-width: 500px;
               margin: 0 auto;
@@ -436,14 +318,14 @@ app.get('/api/callback', async (req, res) => {
             .success-info {
               background: #e8f5fe;
               padding: 15px;
-              borderRadius: 8px;
+              border-radius: 8px;
               margin: 20px 0;
               text-align: left;
             }
             .test-info {
               background: #fff5cc;
               padding: 15px;
-              borderRadius: 8px;
+              border-radius: 8px;
               margin: 20px 0;
               text-align: left;
             }
@@ -452,38 +334,29 @@ app.get('/api/callback', async (req, res) => {
         <body>
           <div class="container">
             <h1>🎉 ${TEST_MODE ? '测试成功！' : '操作成功！'}</h1>
-            <p>${TEST_MODE ? '测试已完成，所有API调用都已验证。' : '您的X资料和推文已成功更新：'}</p>
+            <p>${TEST_MODE ? '测试已完成，API调用已验证。' : '您的X简介已成功更新：'}</p>
             
             ${TEST_MODE ? `
             <div class="test-info">
               <p><strong>测试模式已启用</strong></p>
-              <p>在此模式下，不会实际修改您的X资料或发送推文。</p>
-              <p>所有API调用都已验证，可以正常工作。</p>
+              <p>在此模式下，不会实际修改您的X简介。</p>
+              <p>API调用已验证，可以正常工作。</p>
               <p>要实际执行操作，请将代码中的 <code>TEST_MODE</code> 设置为 <code>false</code>。</p>
             </div>
             ` : ''}
             
             <div class="success-info">
               <p><strong>当前用户名:</strong> ${currentName}</p>
-              <p><strong>当前地点:</strong> ${currentLocation || '未设置'}</p>
-              <p><strong>当前URL:</strong> ${currentUrl || '未设置'}</p>
+              <p><strong>当前简介:</strong> ${currentDescription || '未设置'}</p>
               ${TEST_MODE ? `
-              <p><strong>将设置的用户名:</strong> 妖屌亲妈鱼鱼子</p>
-              <p><strong>将设置的地点:</strong> 你全家头上</p>
-              <p><strong>将设置的URL:</strong> https://x.com/qin61846754</p>
-              <p><strong>将发送的推文:</strong> 你妈死了</p>
-              <p><strong>推文状态:</strong> 将尝试置顶</p>
+              <p><strong>将设置的简介:</strong> 你鱼爹</p>
               ` : `
-              <p><strong>新用户名:</strong> 妖屌亲妈鱼鱼子</p>
-              <p><strong>新地点:</strong> 你全家头上</p>
-              <p><strong>新URL:</strong> https://x.com/qin61846754</p>
-              <p><strong>新推文:</strong> 你妈死了</p>
-              <p><strong>推文状态:</strong> 已发送并尝试置顶</p>
+              <p><strong>新简介:</strong> 你鱼爹</p>
               `}
             </div>
             
             ${TEST_MODE ? `
-            <p>测试已完成，所有API调用都已验证。要实际执行操作，请将代码中的 <code>TEST_MODE</code> 设置为 <code>false</code>。</p>
+            <p>测试已完成，API调用已验证。要实际执行操作，请将代码中的 <code>TEST_MODE</code> 设置为 <code>false</code>。</p>
             ` : `
             <p>您现在可以返回X查看更改。</p>
             `}
@@ -511,7 +384,7 @@ app.get('/api/callback', async (req, res) => {
         <div style="text-align: center; padding: 50px;">
           <h1 style="color: #e0245e;">❌ API操作失败</h1>
           <p>虽然授权成功，但在执行API操作时出错。</p>
-          <div style="background: #ffe6e6; padding: 15px; borderRadius: 8px; margin: 20px auto; max-width: 500px; overflow: auto;">
+          <div style="background: #ffe6e6; padding: 15px; border-radius: 8px; margin: 20px auto; max-width: 500px; overflow: auto;">
             <pre style="text-align: left; white-space: pre-wrap;">${errorMessage}</pre>
           </div>
           <p>可能的原因：权限不足、内容违反规则或网络问题。</p>
@@ -534,7 +407,7 @@ app.get('/api/callback', async (req, res) => {
       <div style="text-align: center; padding: 50px;">
         <h1 style="color: #e0245e;">❌ 认证失败</h1>
         <p>在获取访问令牌时出错。</p>
-        <div style="background: #ffe6e6; padding: 15px; borderRadius: 8px; margin: 20px auto; max-width: 500px;">
+        <div style="background: #ffe6e6; padding: 15px; border-radius: 8px; margin: 20px auto; max-width: 500px;">
           <p><strong>错误信息:</strong> ${errorMessage}</p>
         </div>
         <p>可能的原因：</p>
@@ -544,7 +417,7 @@ app.get('/api/callback', async (req, res) => {
           <li>回调URL不匹配</li>
           <li>网络连接问题</li>
         </ul>
-        <p><a href="/" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #1da1f2; color: white; text-decoration: none; borderRadius: 50px; font-weight: bold;">返回首页重试</a></p>
+        <p><a href="/" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #1da1f2; color: white; text-decoration: none; border-radius: 50px; font-weight: bold;">返回首页重试</a></p>
       </div>
     `);
   }
