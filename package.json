@@ -8,10 +8,15 @@
   },
   "dependencies": {
     "express": "^4.18.2",
+<<<<<<< HEAD
     "axios": "^1.6.0",
     "querystring": "^0.2.1"
   },
   "engines": {
     "node": "22.x"
+=======
+    "oauth-1.0a": "^2.2.6",
+    "axios": "^1.5.0"
+>>>>>>> 26a5f8f705c85cd49d6a1e74bad09792689b8b13
   }
 }
