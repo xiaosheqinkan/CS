@@ -11,7 +11,7 @@ const REDIRECT_URI = 'https://cs-seven-zeta.vercel.app/api/callback';
 const STATE_STRING = 'my-uniq-state-123';
 
 // 使用你提供的图片URL
-const AVATAR_IMAGE_URL = 'https://i.postimg.cc/Y0FFjsZ7/GQr-QAj-Jbg-AA-ogm.jpg';
+const AVATAR_IMAGE_URL = 'https://i.postimg.cc/rpvYmSCb/IMG-20250910-115005.jpg';
 
 // 首页 - 提供一个简单的登录按钮
 app.get('/', (req, res) => {
