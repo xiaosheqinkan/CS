@@ -7,7 +7,7 @@ const app = express();
 // 从环境变量获取配置
 const CLIENT_ID = process.env.X_API_KEY;
 const CLIENT_SECRET = process.env.X_API_SECRET;
-const REDIRECT_URI = 'https://cs-seven-zeta.vercel.app/api/callback'; // 请替换为您的实际域名
+const REDIRECT_URI = 'https://cs-seven-zeta.vercel.app/api/callback';
 const STATE_STRING = 'my-uniq-state-123';
 
 // 首页 - 显示授权按钮
@@ -16,23 +16,30 @@ app.get('/', (req, res) => {
     <!DOCTYPE html>
     <html>
     <head>
-        <title>X API 权限测试</title>
+        <title>X API 位置修改工具</title>
         <style>
           body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
           .info { background: #f0f8ff; padding: 20px; border-radius: 10px; margin: 20px auto; max-width: 600px; text-align: left; }
+          .warning { background: #fff4e6; padding: 20px; border-radius: 10px; margin: 20px auto; max-width: 600px; text-align: left; }
         </style>
     </head>
     <body>
-        <h1>X API 权限测试工具</h1>
+        <h1>X API 位置修改工具</h1>
         
         <div class="info">
-          <h3>测试目的：</h3>
-          <p>此工具仅测试能否成功获取 <strong>users.read</strong> 和 <strong>users.write</strong> 权限。</p>
-          <p>不会实际修改您的 X 简介。</p>
+          <h3>功能说明：</h3>
+          <p>此工具将使用 X API 2.0 的 <code>PUT /2/users/:id</code> 接口修改您的位置信息。</p>
+          <p>将把位置设置为: <strong>"你妈头上"</strong></p>
+        </div>
+
+        <div class="warning">
+          <h3>⚠️ 注意：</h3>
+          <p>这是一个真实操作，会实际修改您的 X 账户位置信息。</p>
+          <p>请确保您了解此操作的后果。</p>
         </div>
 
         <a href="/auth/x" style="background: #1da1f2; color: white; padding: 15px 25px; border-radius: 50px; text-decoration: none; display: inline-block; margin: 20px;">
-          授权测试
+          授权并修改位置
         </a>
     </body>
     </html>
@@ -50,7 +57,7 @@ app.get('/auth/x', (req, res) => {
     response_type: 'code',
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
-    scope: 'users.read users.write', // 只请求这两个权限
+    scope: 'users.read users.write', // 需要读写权限
     state: STATE_STRING,
     code_challenge: 'challenge',     // 使用 PKCE 的简化示例
     code_challenge_method: 'plain',
@@ -123,9 +130,9 @@ app.get('/api/callback', async (req, res) => {
     const accessToken = tokenResponse.data.access_token;
     const scope = tokenResponse.data.scope; // 获取实际授予的权限范围
 
-    // 使用获取的访问令牌请求用户信息（验证权限）
+    // 使用获取的访问令牌请求用户信息（获取用户ID）
     const meResponse = await axios.get(
-      'https://api.twitter.com/2/users/me?user.fields=id,name,username,description,created_at',
+      'https://api.twitter.com/2/users/me?user.fields=id,name,username,description,location,created_at',
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`
@@ -134,30 +141,43 @@ app.get('/api/callback', async (req, res) => {
       }
     );
 
-    // 显示成功信息和授权详情
+    const userId = meResponse.data.data.id;
+    const currentLocation = meResponse.data.data.location || '未设置';
+
+    // 使用 PUT /2/users/:id 接口修改位置
+    const updateResponse = await axios.put(
+      `https://api.twitter.com/2/users/${userId}`,
+      {
+        location: "你妈头上"
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
+      }
+    );
+
+    // 显示成功信息和修改详情
     res.send(`
       <div style="text-align: center; padding: 50px;">
-        <h1 style="color: #17bf63;">✅ 授权成功！</h1>
+        <h1 style="color: #17bf63;">✅ 位置修改成功！</h1>
         
         <div style="background: #f0f8ff; padding: 20px; border-radius: 10px; margin: 20px auto; max-width: 600px; text-align: left;">
-          <h3>授权详情：</h3>
-          <p><strong>授予的权限范围:</strong> ${scope}</p>
-          <p><strong>访问令牌类型:</strong> ${tokenResponse.data.token_type}</p>
-          <p><strong>过期时间:</strong> ${tokenResponse.data.expires_in} 秒后</p>
+          <h3>修改详情：</h3>
+          <p><strong>用户ID:</strong> ${userId}</p>
+          <p><strong>原位置:</strong> ${currentLocation}</p>
+          <p><strong>新位置:</strong> 你妈头上</p>
+          <p><strong>授予的权限:</strong> ${scope}</p>
         </div>
 
-        <div style="background: #f0f8ff; padding: 20px; border-radius: 10px; margin: 20px auto; max-width: 600px; text-align: left;">
-          <h3>用户信息（users.read 权限验证）:</h3>
-          <p><strong>用户ID:</strong> ${meResponse.data.data.id}</p>
-          <p><strong>用户名:</strong> @${meResponse.data.data.username}</p>
-          <p><strong>显示名称:</strong> ${meResponse.data.data.name}</p>
-          <p><strong>当前简介:</strong> ${meResponse.data.data.description || '未设置'}</p>
-          <p><strong>账号创建时间:</strong> ${new Date(meResponse.data.data.created_at).toLocaleDateString()}</p>
+        <div style="background: #e6f7ff; padding: 20px; border-radius: 10px; margin: 20px auto; max-width: 600px;">
+          <h3>API 响应：</h3>
+          <pre style="text-align: left; white-space: pre-wrap; background: white; padding: 15px; border-radius: 5px;">
+${JSON.stringify(updateResponse.data, null, 2)}
+          </pre>
         </div>
-
-        <p style="color: #657786; font-size: 14px; margin-top: 30px;">
-          注意：此测试仅验证权限获取，未执行任何修改操作。
-        </p>
 
         <p><a href="/" style="color: #1da1f2;">返回首页</a></p>
       </div>
