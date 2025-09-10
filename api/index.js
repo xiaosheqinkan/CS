@@ -92,7 +92,7 @@ app.get('/auth/x', (req, res) => {
       response_type: 'code',
       client_id: CLIENT_ID,
       redirect_uri: REDIRECT_URI,
-      scope: 'tweet.read users.read account.write offline.access',
+      scope: 'users.read users.write offline.access', // 修复了权限范围
       state: STATE_STRING,
       code_challenge: 'challenge',
       code_challenge_method: 'plain',
