@@ -1,15 +1,30 @@
 const express = require('express');
+const OAuth = require('oauth-1.0a');
+const crypto = require('crypto');
 const axios = require('axios');
-const querystring = require('querystring');
 
 const app = express();
 
 // 从环境变量获取配置
-const CLIENT_ID = process.env.X_API_KEY;
-const CLIENT_SECRET = process.env.X_API_SECRET;
-const REDIRECT_URI = 'https://cs-seven-zeta.vercel.app/api/callback';
-const STATE_STRING = 'my-uniq-state-123';
-const TEST_MODE = false;
+const CONSUMER_KEY = process.env.X_API_KEY;
+const CONSUMER_SECRET = process.env.X_API_SECRET;
+const ACCESS_TOKEN = process.env.X_ACCESS_TOKEN;
+const ACCESS_TOKEN_SECRET = process.env.X_ACCESS_TOKEN_SECRET;
+
+// OAuth 1.0a 配置
+const oauth = OAuth({
+  consumer: {
+    key: CONSUMER_KEY,
+    secret: CONSUMER_SECRET
+  },
+  signature_method: 'HMAC-SHA1',
+  hash_function(base_string, key) {
+    return crypto
+      .createHmac('sha1', key)
+      .update(base_string)
+      .digest('base64');
+  }
+});
 
 // 首页
 app.get('/', (req, res) => {
@@ -17,125 +32,97 @@ app.get('/', (req, res) => {
     <!DOCTYPE html>
     <html>
     <head>
-        <title>X用户简介更新工具</title>
-        <style>body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }</style>
+        <title>X用户简介更新工具 (API 1.1)</title>
+        <style>
+          body { 
+            font-family: Arial, sans-serif; 
+            text-align: center; 
+            padding: 50px; 
+            background-color: #f5f8fa;
+          }
+          .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 500px;
+            margin: 0 auto;
+          }
+          h1 { color: #1da1f2; }
+          .btn { 
+            background: #1da1f2; 
+            color: white; 
+            padding: 15px 25px; 
+            border-radius: 50px; 
+            text-decoration: none; 
+            display: inline-block; 
+            font-weight: bold;
+            margin-top: 20px;
+          }
+        </style>
     </head>
     <body>
-        <h1>X用户简介更新工具</h1>
-        <p>点击下方按钮授权我们来更新您的简介。</p>
-        <a href="/auth/x" style="background: #1da1f2; color: white; padding: 15px 25px; border-radius: 50px; text-decoration: none;">Login with X</a>
+        <div class="container">
+          <h1>X用户简介更新工具 (API 1.1)</h1>
+          <p>点击下方按钮更新您的X简介。</p>
+          <a class="btn" href="/update-profile">更新简介为"你鱼爹"</a>
+        </div>
     </body>
     </html>
   `);
 });
 
-// 启动OAuth流程
-app.get('/auth/x', (req, res) => {
-  if (!CLIENT_ID || !CLIENT_SECRET) {
-    return res.status(500).send('服务器配置错误: 缺少API密钥');
-  }
-  
-  const authUrl = `https://twitter.com/i/oauth2/authorize?${
-    querystring.stringify({
-      response_type: 'code',
-      client_id: CLIENT_ID,
-      redirect_uri: REDIRECT_URI,
-      scope: 'users.read users.write', // 简化权限范围
-      state: STATE_STRING,
-      code_challenge: 'challenge',
-      code_challenge_method: 'plain',
-    })
-  }`;
-  
-  res.redirect(authUrl);
-});
-
-// 回调处理
-app.get('/api/callback', async (req, res) => {
-  const { code, state, error, error_description } = req.query;
-
-  if (error) {
-    return res.send(`
-      <div style="text-align: center; padding: 50px;">
-        <h1 style="color: #e0245e;">❌ 授权失败</h1>
-        <p>X平台返回错误: ${error}</p>
-        <p>${error_description || '无详细描述'}</p>
-        <p><a href="/">返回首页重试</a></p>
-      </div>
-    `);
-  }
-
-  if (!code) {
-    return res.send('授权流程异常: 缺少必要的参数');
-  }
-
-  if (state !== STATE_STRING) {
-    return res.send('安全验证失败: State参数不匹配');
-  }
-
+// 更新简介端点
+app.get('/update-profile', async (req, res) => {
   try {
-    // 获取访问令牌
-    const tokenResponse = await axios.post(
-      'https://api.twitter.com/2/oauth2/token',
-      querystring.stringify({
-        code: code,
-        grant_type: 'authorization_code',
-        client_id: CLIENT_ID,
-        redirect_uri: REDIRECT_URI,
-        code_verifier: 'challenge',
-      }),
+    // 检查必要的环境变量
+    if (!CONSUMER_KEY || !CONSUMER_SECRET || !ACCESS_TOKEN || !ACCESS_TOKEN_SECRET) {
+      throw new Error('缺少必要的API配置，请检查环境变量设置');
+    }
+
+    // 准备API请求
+    const request_data = {
+      url: 'https://api.twitter.com/1.1/account/update_profile.json',
+      method: 'POST',
+      data: {
+        description: '你鱼爹'
+      }
+    };
+
+    // 生成OAuth 1.0a签名
+    const token = {
+      key: ACCESS_TOKEN,
+      secret: ACCESS_TOKEN_SECRET
+    };
+
+    const authHeader = oauth.toHeader(oauth.authorize(request_data, token));
+    
+    // 发送请求到X API
+    const response = await axios.post(
+      request_data.url,
+      new URLSearchParams(request_data.data),
       {
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': 'Basic ' + Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64'),
-        },
-        timeout: 10000
+          'Authorization': authHeader.Authorization,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
       }
     );
 
-    const accessToken = tokenResponse.data.access_token;
-    
-    // 获取用户信息
-    const meResponse = await axios.get(
-      'https://api.twitter.com/2/users/me?user.fields=id,name,username,description',
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        },
-        timeout: 10000
-      }
-    );
-    
-    const userId = meResponse.data.data.id;
-    const username = meResponse.data.data.username;
-    const currentDescription = meResponse.data.data.description;
-    
-    // 更新用户简介
-    const updateResponse = await axios.patch(
-      `https://api.twitter.com/2/users/${userId}`,
-      { description: "你鱼爹" },
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 10000
-      }
-    );
-    
     // 显示成功页面
     res.send(`
       <div style="text-align: center; padding: 50px;">
         <h1 style="color: #17bf63;">🎉 操作成功！</h1>
-        <p>您的X简介已成功更新。</p>
-        <p><strong>原简介:</strong> ${currentDescription || '未设置'}</p>
-        <p><strong>新简介:</strong> 你鱼爹</p>
-        <p><a href="https://x.com/${username}" target="_blank">查看我的X主页</a></p>
+        <p>您的X简介已成功更新为"你鱼爹"。</p>
+        <p><strong>用户名:</strong> ${response.data.screen_name}</p>
+        <p><strong>名称:</strong> ${response.data.name}</p>
+        <p><a href="https://x.com/${response.data.screen_name}" target="_blank">查看我的X主页</a></p>
+        <p><a href="/">返回首页</a></p>
       </div>
     `);
-    
+
   } catch (error) {
-    console.error('操作失败:', error.response?.data || error.message);
+    console.error('更新失败:', error.response?.data || error.message);
     
     let errorMessage = '未知错误';
     if (error.response?.data) {
@@ -146,7 +133,7 @@ app.get('/api/callback', async (req, res) => {
     
     res.status(500).send(`
       <div style="text-align: center; padding: 50px;">
-        <h1 style="color: #e0245e;">❌ 操作失败</h1>
+        <h1 style="color: #e0245e;">❌ 更新失败</h1>
         <pre style="text-align: left; white-space: pre-wrap;">${errorMessage}</pre>
         <p><a href="/">返回首页重试</a></p>
       </div>
