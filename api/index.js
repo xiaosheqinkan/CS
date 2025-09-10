@@ -21,6 +21,7 @@ app.get('/', (req, res) => {
           body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
           .info { background: #f0f8ff; padding: 20px; border-radius: 10px; margin: 20px auto; max-width: 600px; text-align: left; }
           .warning { background: #fff4e6; padding: 20px; border-radius: 10px; margin: 20px auto; max-width: 600px; text-align: left; }
+          .config { background: #f9f9f9; padding: 20px; border-radius: 10px; margin: 20px auto; max-width: 600px; text-align: left; }
         </style>
     </head>
     <body>
@@ -38,6 +39,13 @@ app.get('/', (req, res) => {
           <p>请确保您了解此操作的后果。</p>
         </div>
 
+        <div class="config">
+          <h3>当前配置：</h3>
+          <p><strong>客户端ID:</strong> ${CLIENT_ID ? '已设置' : '未设置'}</p>
+          <p><strong>客户端密钥:</strong> ${CLIENT_SECRET ? '已设置' : '未设置'}</p>
+          <p><strong>回调URL:</strong> ${REDIRECT_URI}</p>
+        </div>
+
         <a href="/auth/x" style="background: #1da1f2; color: white; padding: 15px 25px; border-radius: 50px; text-decoration: none; display: inline-block; margin: 20px;">
           授权并修改位置
         </a>
@@ -49,7 +57,17 @@ app.get('/', (req, res) => {
 // 启动 OAuth 2.0 授权流程
 app.get('/auth/x', (req, res) => {
   if (!CLIENT_ID || !CLIENT_SECRET) {
-    return res.status(500).send('服务器配置错误: 缺少 API 密钥或密钥秘密');
+    return res.status(500).send(`
+      <div style="text-align: center; padding: 50px;">
+        <h1 style="color: #e0245e;">❌ 配置错误</h1>
+        <p>请在 Vercel 环境变量中设置:</p>
+        <ul style="text-align: left;">
+          <li>X_API_KEY - 您的 X API 密钥</li>
+          <li>X_API_SECRET - 您的 X API 密钥秘密</li>
+        </ul>
+        <p><a href="/">返回首页</a></p>
+      </div>
+    `);
   }
   
   // 构建授权 URL - 关键部分：权限范围(scope)
@@ -77,22 +95,36 @@ app.get('/api/callback', async (req, res) => {
         <h1 style="color: #e0245e;">❌ 授权失败</h1>
         <p><strong>错误类型:</strong> ${error}</p>
         <p><strong>详细描述:</strong> ${error_description || '无详细描述'}</p>
+        
         ${error === 'invalid_scope' ? `
           <div style="background: #fff4f4; padding: 15px; border-radius: 8px; margin: 20px;">
             <h3>invalid_scope 错误解决方案：</h3>
+            <p>此错误通常表示您的应用配置有问题。请按照以下步骤检查：</p>
             <ol style="text-align: left;">
               <li>登录 <a href="https://developer.twitter.com" target="_blank">X Developer Portal</a></li>
               <li>进入您的应用设置</li>
-              <li>在 "User authentication settings" 中确保已启用：
+              <li>在 "User authentication settings" 中：
                 <ul>
-                  <li>Read users (users.read)</li>
-                  <li>Edit users (users.write)</li>
+                  <li>确保应用类型设置为 "Read and write"</li>
+                  <li>确保已启用 "Read users (users.read)" 和 "Edit users (users.write)"</li>
+                  <li>确保回调URL设置为: <code>${REDIRECT_URI}</code></li>
                 </ul>
               </li>
-              <li>应用类型必须设置为 "Read and write"</li>
+              <li>保存设置并等待几分钟让更改生效</li>
+              <li>如果问题仍然存在，尝试重新生成API密钥和密钥秘密</li>
             </ol>
           </div>
         ` : ''}
+        
+        <div style="background: #f8f8f8; padding: 15px; border-radius: 8px; margin: 20px;">
+          <h3>当前请求参数：</h3>
+          <pre style="text-align: left; white-space: pre-wrap;">
+客户端ID: ${CLIENT_ID}
+回调URL: ${REDIRECT_URI}
+请求的权限: users.read users.write
+          </pre>
+        </div>
+        
         <p><a href="/">返回首页重试</a></p>
       </div>
     `);
