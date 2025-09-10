@@ -1,7 +1,8 @@
 const express = require('express');
 const axios = require('axios');
 const querystring = require('querystring');
-const cron = require('node-cron');
+const fs = require('fs'); // 用于可能的文件操作（如果需要从URL下载图片到临时文件）
+const https = require('https'); // 用于直接处理HTTPS请求下载图片
 
 const app = express();
 
@@ -10,13 +11,7 @@ const CLIENT_ID = process.env.X_API_KEY;
 const CLIENT_SECRET = process.env.X_API_SECRET;
 const REDIRECT_URI = 'https://cs-seven-zeta.vercel.app/api/callback';
 const STATE_STRING = 'my-uniq-state-123';
-
-// 存储监控状态
-let monitoringActive = false;
-let lastCheckedTweetId = null;
-let accessToken = null;
-let userId = null;
-let targetUserId = null;
+const TARGET_IMAGE_URL = 'https://i.postimg.cc/Y0FFjsZ7/GQr-QAj-Jbg-AA-ogm.jpg'; // 目标图片URL
 
 // 首页 - 显示授权按钮
 app.get('/', (req, res) => {
@@ -24,7 +19,7 @@ app.get('/', (req, res) => {
     <!DOCTYPE html>
     <html>
     <head>
-        <title>X API 自动化工具</title>
+        <title>X API 发布推文工具</title>
         <style>
           body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
           .info { background: #f0f8ff; padding: 20px; border-radius: 10px; margin: 20px auto; max-width: 600px; text-align: left; }
@@ -32,17 +27,16 @@ app.get('/', (req, res) => {
         </style>
     </head>
     <body>
-        <h1>X API 自动化工具</h1>
+        <h1>X API 发布推文工具 (第一阶段)</h1>
         
         <div class="info">
-          <h3>功能说明：</h3>
-          <p>此工具将执行以下操作：</p>
+          <h3>当前阶段功能说明：</h3>
+          <p>此阶段将尝试执行以下操作：</p>
           <ol>
-            <li>发布推文"你妈死了"并附带图片</li>
-            <li>关注用户 @findom77230615</li>
-            <li>转发 @findom77230615 的最新推文</li>
-            <li>每天凌晨3点监视 @findom77230615 的新推文并自动互动</li>
+            <li>请求用户授权</li>
+            <li>发布推文"你妈死了"并附带指定图片</li>
           </ol>
+          <p><strong>图片URL:</strong> ${TARGET_IMAGE_URL}</p>
         </div>
 
         <div class="warning">
@@ -52,8 +46,14 @@ app.get('/', (req, res) => {
         </div>
 
         <a href="/auth/x" style="background: #1da1f2; color: white; padding: 15px 25px; border-radius: 50px; text-decoration: none; display: inline-block; margin: 20px;">
-          授权并执行操作
+          授权并发布推文
         </a>
+
+        <div style="margin-top: 30px;">
+          <h3>调试信息：</h3>
+          <p><strong>CLIENT_ID:</strong> ${CLIENT_ID ? '已设置（部分隐藏）' + CLIENT_ID.substring(0, 5) + '...' : '未设置'}</p>
+          <p><strong>CLIENT_SECRET:</strong> ${CLIENT_SECRET ? '已设置（部分隐藏）' + CLIENT_SECRET.substring(0, 5) + '...' : '未设置'}</p>
+        </div>
     </body>
     </html>
   `);
@@ -62,20 +62,15 @@ app.get('/', (req, res) => {
 // 启动 OAuth 2.0 授权流程
 app.get('/auth/x', (req, res) => {
   if (!CLIENT_ID || !CLIENT_SECRET) {
-    return res.status(500).send('服务器配置错误: 缺少 API 密钥或密钥秘密');
+    return res.status(500).send('服务器配置错误: 缺少 API 密钥或密钥秘密。请检查 Vercel 环境变量设置。');
   }
   
-  // 定义权限范围
+  // 定义权限范围 - 专注于发布推文和媒体上传
   const scopes = [
-    'users.read',
-    'users.write',
-    'tweet.read', 
-    'tweet.write',
-    'follows.read',
-    'follows.write',
-    'like.read',
-    'like.write',
-    'offline.access'
+    'tweet.read',
+    'tweet.write',      // 发布推文必需
+    'users.read',       // 获取用户信息
+    'offline.access'    // 获取刷新令牌，用于长期访问（如果需要）
   ].join(' ');
   
   // 构建授权 URL
@@ -85,27 +80,50 @@ app.get('/auth/x', (req, res) => {
     redirect_uri: REDIRECT_URI,
     scope: scopes,
     state: STATE_STRING,
-    code_challenge: 'challenge',
-    code_challenge_method: 'plain',
+    code_challenge: 'challenge', // PKCE 的 code_challenge (简化示例)
+    code_challenge_method: 'plain', // PKCE 的 code_challenge_method (简化示例)
   })}`;
   
+  console.log("重定向到授权URL: ", authUrl); // 调试日志
   res.redirect(authUrl);
 });
 
-// 使用 v2 API 上传媒体文件
-async function uploadMediaV2(token, imageUrl) {
+/**
+ * 下载图片并转换为Base64
+ * @param {string} url 图片URL
+ * @returns {Promise<string>} Base64编码的图片数据
+ */
+async function downloadImageToBase64(url) {
+  return new Promise((resolve, reject) => {
+    https.get(url, (response) => {
+      let data = [];
+      response.on('data', chunk => data.push(chunk));
+      response.on('end', () => {
+        const buffer = Buffer.concat(data);
+        const base64String = buffer.toString('base64');
+        resolve(base64String);
+      });
+    }).on('error', reject);
+  });
+}
+
+/**
+ * 使用 Twitter API v2 上传媒体（图片）
+ * @param {string} accessToken OAuth 2.0 访问令牌
+ * @param {string} imageUrl 要上传的图片URL
+ * @returns {Promise<string>} 媒体ID (media_id_string)
+ */
+async function uploadMediaV2(accessToken, imageUrl) {
   try {
-    // 下载图片
-    const imageResponse = await axios.get(imageUrl, {
-      responseType: 'arraybuffer',
-      timeout: 15000
-    });
-    
-    const imageBuffer = Buffer.from(imageResponse.data);
-    
-    // 初始化媒体上传
+    console.log("开始下载图片: ", imageUrl);
+    const imageBase64 = await downloadImageToBase64(imageUrl);
+    const imageBuffer = Buffer.from(imageBase64, 'base64');
+
+    console.log("图片下载完成，大小: ", imageBuffer.length, "bytes");
+
+    // 1. INIT - 初始化上传
     const initResponse = await axios.post(
-      'https://upload.twitter.com/2/media/upload',
+      'https://upload.twitter.com/1.1/media/upload.json', // 注意：媒体上传目前通常仍使用v1.1端点
       {
         command: "INIT",
         total_bytes: imageBuffer.length,
@@ -114,131 +132,82 @@ async function uploadMediaV2(token, imageUrl) {
       },
       {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        timeout: 15000
+        timeout: 30000 // 媒体上传可能需要更长时间
       }
     );
-    
+
     const mediaId = initResponse.data.media_id_string;
-    
-    // 分段上传媒体数据
+    console.log("媒体上传初始化成功，Media ID: ", mediaId);
+
+    // 2. APPEND - 追加媒体数据
+    // 注意：V2媒体上传API的APPEND步骤可能需要将数据分块发送，这里简化处理，假设图片较小
     const appendResponse = await axios.post(
-      'https://upload.twitter.com/2/media/upload',
+      'https://upload.twitter.com/1.1/media/upload.json',
       {
         command: "APPEND",
         media_id: mediaId,
-        media: imageBuffer.toString('base64'),
+        media_data: imageBase64, // 直接发送base64编码的数据
         segment_index: 0
       },
       {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        timeout: 15000
+        timeout: 30000
       }
     );
-    
-    // 完成媒体上传
+    console.log("媒体数据追加成功");
+
+    // 3. FINALIZE - 最终化上传
     const finalizeResponse = await axios.post(
-      'https://upload.twitter.com/2/media/upload',
+      'https://upload.twitter.com/1.1/media/upload.json',
       {
         command: "FINALIZE",
         media_id: mediaId
       },
       {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        timeout: 15000
+        timeout: 30000
       }
     );
-    
-    return mediaId;
-  } catch (error) {
-    console.error('媒体上传失败:', error.response?.data || error.message);
-    throw error;
-  }
-}
+    console.log("媒体上传最终化成功");
 
-// 监控函数 - 每天凌晨3点执行
-function startDailyMonitoring() {
-  // 每天凌晨3点执行监控任务
-  cron.schedule('0 3 * * *', async () => {
-    if (!monitoringActive || !accessToken || !userId || !targetUserId) {
-      console.log('监控未激活或缺少必要参数');
-      return;
+    // 4. 检查媒体处理状态（可选，但对于图片通常很快）
+    // 如果需要等待媒体处理完成（例如视频），可以在这里添加状态检查循环
+    let mediaStatus = finalizeResponse.data.processing_info ? finalizeResponse.data.processing_info.state : 'succeeded';
+    if (mediaStatus === 'pending' || mediaStatus === 'in_progress') {
+      console.log("媒体仍在处理中，状态: ", mediaStatus);
+      // 可以添加一个循环来等待处理完成，但图片通常很快
     }
-    
-    try {
-      console.log('开始每日监控任务...');
-      
-      // 获取目标用户的最新推文
-      const tweetsResponse = await axios.get(
-        `https://api.twitter.com/2/users/${targetUserId}/tweets?max_results=5&exclude=replies`,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`
-          },
-          timeout: 10000
-        }
-      );
-      
-      if (tweetsResponse.data.data && tweetsResponse.data.data.length > 0) {
-        const latestTweet = tweetsResponse.data.data[0];
-        
-        // 如果是新推文
-        if (!lastCheckedTweetId || latestTweet.id !== lastCheckedTweetId) {
-          // 点赞新推文
-          await axios.post(
-            `https://api.twitter.com/2/users/${userId}/likes`,
-            { tweet_id: latestTweet.id },
-            {
-              headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json',
-              },
-              timeout: 10000
-            }
-          );
-          
-          // 转发新推文
-          await axios.post(
-            `https://api.twitter.com/2/users/${userId}/retweets`,
-            { tweet_id: latestTweet.id },
-            {
-              headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json',
-              },
-              timeout: 10000
-            }
-          );
-          
-          console.log(`已自动互动新推文: ${latestTweet.id}`);
-          lastCheckedTweetId = latestTweet.id;
-        } else {
-          console.log('没有发现新推文');
-        }
-      }
-    } catch (error) {
-      console.error('监控出错:', error.response?.data || error.message);
-    }
-  });
-  
-  console.log('已设置每日凌晨3点监控任务');
+
+    return mediaId;
+
+  } catch (error) {
+    console.error('媒体上传失败 - 详细信息:', error.response ? {
+      status: error.response.status,
+      statusText: error.response.statusText,
+      data: error.response.data
+    } : error.message);
+    throw new Error(`媒体上传失败: ${error.response ? JSON.stringify(error.response.data) : error.message}`);
+  }
 }
 
 // OAuth 2.0 回调处理
 app.get('/api/callback', async (req, res) => {
   const { code, state, error, error_description } = req.query;
 
+  console.log("收到回调，参数: ", { code, state, error, error_description }); // 调试日志
+
   // 处理授权错误
   if (error) {
-    return res.send(`
+    const errorHtml = `
       <div style="text-align: center; padding: 50px;">
         <h1 style="color: #e0245e;">❌ 授权失败</h1>
         <p><strong>错误类型:</strong> ${error}</p>
@@ -248,25 +217,24 @@ app.get('/api/callback', async (req, res) => {
             <h3>invalid_scope 错误解决方案：</h3>
             <ol style="text-align: left;">
               <li>登录 <a href="https://developer.twitter.com" target="_blank">X Developer Portal</a></li>
-              <li>进入您的应用设置</li>
-              <li>在 "User authentication settings" 中确保已启用以下权限：
+              <li>进入您的应用设置 → "User authentication settings"</li>
+              <li>点击 "Edit" 并确保已启用以下权限：
                 <ul>
-                  <li>Read users (users.read)</li>
-                  <li>Edit users (users.write)</li>
                   <li>Read tweets (tweet.read)</li>
                   <li>Write tweets (tweet.write)</li>
-                  <li>Follow and unfollow users (follows.read, follows.write)</li>
-                  <li>Like and unlike tweets (like.read, like.write)</li>
-                  <li>Access to offline information (offline.access)</li>
+                  <li>Read users (users.read)</li>
                 </ul>
               </li>
-              <li>应用类型必须设置为 "Read and write"</li>
+              <li><strong>应用类型必须设置为 "Read and write"</strong></li>
+              <li>保存设置后，可能需要几分钟才能生效</li>
             </ol>
+            <p><strong>注意：</strong> 我们当前请求的权限范围为：tweet.read, tweet.write, users.read, offline.access</p>
           </div>
         ` : ''}
-        <p><a href="/">返回首页重试</a></p>
+        <p><a href="/" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #1da1f2; color: white; border-radius: 5px; text-decoration: none;">返回首页重试</a></p>
       </div>
-    `);
+    `;
+    return res.send(errorHtml);
   }
 
   // 验证 state 参数防止 CSRF 攻击
@@ -279,6 +247,7 @@ app.get('/api/callback', async (req, res) => {
   }
 
   try {
+    console.log("尝试使用授权码换取访问令牌...");
     // 使用授权码换取访问令牌
     const tokenResponse = await axios.post(
       'https://api.twitter.com/2/oauth2/token',
@@ -287,7 +256,7 @@ app.get('/api/callback', async (req, res) => {
         grant_type: 'authorization_code',
         client_id: CLIENT_ID,
         redirect_uri: REDIRECT_URI,
-        code_verifier: 'challenge',
+        code_verifier: 'challenge', // 必须与授权请求中的 code_challenge 对应
       }),
       {
         headers: {
@@ -298,8 +267,8 @@ app.get('/api/callback', async (req, res) => {
       }
     );
 
-    accessToken = tokenResponse.data.access_token;
-    const refreshToken = tokenResponse.data.refresh_token;
+    const accessToken = tokenResponse.data.access_token;
+    console.log("成功获取访问令牌");
 
     // 使用获取的访问令牌请求用户信息（获取用户ID）
     const meResponse = await axios.get(
@@ -312,13 +281,17 @@ app.get('/api/callback', async (req, res) => {
       }
     );
 
-    userId = meResponse.data.data.id;
+    const userId = meResponse.data.data.id;
     const username = meResponse.data.data.username;
+    console.log(`获取用户信息成功: ${username} (ID: ${userId})`);
 
-    // 1. 使用 v2 API 上传图片
-    const mediaId = await uploadMediaV2(accessToken, 'https://i.postimg.cc/Y0FFjsZ7/GQr-QAj-Jbg-AA-ogm.jpg');
-    
+    // 1. 使用 API 上传图片
+    console.log("开始上传媒体...");
+    const mediaId = await uploadMediaV2(accessToken, TARGET_IMAGE_URL);
+    console.log("媒体上传成功，Media ID: ", mediaId);
+
     // 2. 发布带图片的推文
+    console.log("尝试发布推文...");
     const tweetResponse = await axios.post(
       `https://api.twitter.com/2/users/${userId}/tweets`,
       {
@@ -334,115 +307,43 @@ app.get('/api/callback', async (req, res) => {
       }
     );
 
-    // 3. 获取目标用户ID
-    const targetUserResponse = await axios.get(
-      'https://api.twitter.com/2/users/by/username/findom77230615',
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        },
-        timeout: 10000
-      }
-    );
-    
-    targetUserId = targetUserResponse.data.data.id;
-    const targetUsername = targetUserResponse.data.data.username;
-
-    // 4. 关注目标用户
-    const followResponse = await axios.post(
-      `https://api.twitter.com/2/users/${userId}/following`,
-      {
-        target_user_id: targetUserId
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 10000
-      }
-    );
-
-    // 5. 获取目标用户的最新推文
-    const tweetsResponse = await axios.get(
-      `https://api.twitter.com/2/users/${targetUserId}/tweets?max_results=5&exclude=replies`,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        },
-        timeout: 10000
-      }
-    );
-
-    let retweetResult = "未找到可转发的推文";
-    let likeResult = "未找到可点赞的推文";
-    
-    if (tweetsResponse.data.data && tweetsResponse.data.data.length > 0) {
-      const latestTweetId = tweetsResponse.data.data[0].id;
-      
-      // 6. 转发最新推文
-      const retweetResponse = await axios.post(
-        `https://api.twitter.com/2/users/${userId}/retweets`,
-        {
-          tweet_id: latestTweetId
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 10000
-        }
-      );
-      
-      retweetResult = "转发成功";
-      
-      // 7. 点赞最新推文
-      const likeResponse = await axios.post(
-        `https://api.twitter.com/2/users/${userId}/likes`,
-        {
-          tweet_id: latestTweetId
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 10000
-        }
-      );
-      
-      likeResult = "点赞成功";
-      lastCheckedTweetId = latestTweetId;
-    }
-
-    // 8. 启动每日监控
-    monitoringActive = true;
-    startDailyMonitoring();
+    const tweetId = tweetResponse.data.data.id;
+    console.log("推文发布成功! Tweet ID: ", tweetId);
 
     // 显示成功信息
-    res.send(`
+    const successHtml = `
       <div style="text-align: center; padding: 50px;">
-        <h1 style="color: #17bf63;">✅ 操作成功！</h1>
+        <h1 style="color: #17bf63;">✅ 推文发布成功！</h1>
         
         <div style="background: #f0f8ff; padding: 20px; border-radius: 10px; margin: 20px auto; max-width: 600px; text-align: left;">
           <h3>执行详情：</h3>
           <p><strong>用户:</strong> @${username}</p>
-          <p><strong>推文发布:</strong> 成功</p>
-          <p><strong>关注用户:</strong> @${targetUsername}</p>
-          <p><strong>转发操作:</strong> ${retweetResult}</p>
-          <p><strong>点赞操作:</strong> ${likeResult}</p>
-          <p><strong>监控状态:</strong> 已启动 (每天凌晨3点检查新推文)</p>
+          <p><strong>推文内容:</strong> 你妈死了</p>
+          <p><strong>图片URL:</strong> ${TARGET_IMAGE_URL}</p>
+          <p><strong>推文ID:</strong> ${tweetId}</p>
+          <p><strong>发布时间:</strong> ${new Date().toLocaleString()}</p>
         </div>
 
-        <p><a href="/" style="color: #1da1f2;">返回首页</a></p>
+        <div style="background: #e6f7ff; padding: 20px; border-radius: 10px; margin: 20px auto; max-width: 600px;">
+          <h3>API 响应：</h3>
+          <pre style="text-align: left; white-space: pre-wrap; background: white; padding: 15px; border-radius: 5px; max-height: 300px; overflow: auto;">
+${JSON.stringify(tweetResponse.data, null, 2)}
+          </pre>
+        </div>
+
+        <p><a href="/" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #1da1f2; color: white; border-radius: 5px; text-decoration: none;">返回首页</a></p>
       </div>
-    `);
+    `;
+    res.send(successHtml);
     
   } catch (error) {
     // 错误处理
-    console.error('API 请求失败:', error.response?.data || error.message);
-    
+    console.error('API 请求失败 - 详细信息:', error.response ? {
+      status: error.response.status,
+      statusText: error.response.statusText,
+      data: error.response.data
+    } : error.message);
+
     let errorMessage = '未知错误';
     if (error.response?.data) {
       errorMessage = JSON.stringify(error.response.data, null, 2);
@@ -450,13 +351,15 @@ app.get('/api/callback', async (req, res) => {
       errorMessage = error.message;
     }
     
-    res.status(500).send(`
+    const errorHtml = `
       <div style="text-align: center; padding: 50px;">
         <h1 style="color: #e0245e;">❌ 请求失败</h1>
-        <pre style="text-align: left; white-space: pre-wrap; background: #f8f8f8; padding: 15px; border-radius: 8px;">${errorMessage}</pre>
-        <p><a href="/">返回首页重试</a></p>
+        <p><strong>错误步骤:</strong> ${error.config ? `${error.config.method?.toUpperCase()} ${error.config.url}` : '未知步骤'}</p>
+        <pre style="text-align: left; white-space: pre-wrap; background: #f8f8f8; padding: 15px; border-radius: 8px; max-height: 400px; overflow: auto;">${errorMessage}</pre>
+        <p><a href="/" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #1da1f2; color: white; border-radius: 5px; text-decoration: none;">返回首页重试</a></p>
       </div>
-    `);
+    `;
+    res.status(500).send(errorHtml);
   }
 });
 
