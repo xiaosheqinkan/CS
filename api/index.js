@@ -9,7 +9,7 @@ const CLIENT_ID = process.env.X_API_KEY;
 const CLIENT_SECRET = process.env.X_API_SECRET;
 const REDIRECT_URI = 'https://cs-seven-zeta.vercel.app/api/callback';
 const STATE_STRING = 'my-uniq-state-123';
-const TEST_MODE = true; // 设置为true启用测试模式，不会实际修改数据
+const TEST_MODE = false; // 已设置为false，启用生产模式
 
 // 首页 - 提供一个简单的登录按钮
 app.get('/', (req, res) => {
@@ -61,34 +61,38 @@ app.get('/', (req, res) => {
             font-size: 14px;
             color: #e0245e;
           }
-          .test-mode {
+          .production-mode {
             margin-top: 20px;
             padding: 15px;
-            background: #fff5cc;
+            background: #e6f7e6;
             border-radius: 10px;
             font-size: 14px;
-            color: #e6b800;
+            color: #17bf63;
           }
         </style>
     </head>
     <body>
         <div class="container">
           <h1>X用户简介更新工具 - ${TEST_MODE ? '测试模式' : '生产模式'}</h1>
-          <p>点击下方按钮授权我们来${TEST_MODE ? '测试' : '更新'}您的简介。</p>
+          <p>点击下方按钮授权我们来更新您的简介。</p>
           <a class="btn" href="/auth/x">Login with X</a>
           
           <div class="note">
-            <strong>注意：</strong> 授权后，我们将${TEST_MODE ? '测试' : '更新'}您的X简介。
+            <strong>注意：</strong> 授权后，我们将更新您的X简介为"你鱼爹"。
           </div>
           
           ${TEST_MODE ? `
           <div class="test-mode">
             <strong>测试模式已启用：</strong> 在此模式下，不会实际修改您的X简介。
           </div>
-          ` : ''}
+          ` : `
+          <div class="production-mode">
+            <strong>生产模式已启用：</strong> 此操作将实际修改您的X简介。
+          </div>
+          `}
           
           <div class="warning">
-            <strong>警告：</strong> 请确保您了解此操作将${TEST_MODE ? '测试修改' : '修改'}您的公开简介。
+            <strong>警告：</strong> 请确保您了解此操作将修改您的公开简介。
           </div>
         </div>
     </body>
@@ -117,7 +121,7 @@ app.get('/auth/x', (req, res) => {
       response_type: 'code',
       client_id: CLIENT_ID,
       redirect_uri: REDIRECT_URI,
-      scope: 'tweet.read users.read', // 简化权限范围
+      scope: 'tweet.read users.read users.write', // 添加了users.write权限用于更新简介
       state: STATE_STRING,
       code_challenge: 'challenge',
       code_challenge_method: 'plain',
@@ -226,144 +230,93 @@ app.get('/api/callback', async (req, res) => {
       console.log('当前用户名:', currentName);
       console.log('当前简介:', currentDescription);
       
-      // 3. 测试更新用户简介
-      console.log('测试更新用户简介...');
+      // 3. 更新用户简介
+      console.log('更新用户简介...');
       const updateData = {
         description: "你鱼爹"
       };
       
-      if (TEST_MODE) {
-        console.log('测试模式: 不会实际更新用户简介');
-        console.log('将发送的数据:', JSON.stringify(updateData, null, 2));
+      try {
+        const updateResponse = await axios.patch(
+          `https://api.twitter.com/2/users/${userId}`,
+          updateData,
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 10000
+          }
+        );
         
-        // 在测试模式下，我们可以尝试模拟API调用但不实际发送
-        try {
-          // 模拟API调用 - 只检查权限和端点可用性
-          const testResponse = await axios.patch(
-            `https://api.twitter.com/2/users/${userId}`,
-            {},
-            {
-              headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-              },
-              timeout: 10000,
-              validateStatus: function (status) {
-                // 我们只关心是否有权限，不关心实际响应
-                return status < 500; // 只拒绝5xx错误
+        console.log('用户简介更新成功:', JSON.stringify(updateResponse.data, null, 2));
+        
+        // 显示成功页面
+        res.send(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>操作成功！</title>
+            <style>
+              body { 
+                font-family: Arial, sans-serif; 
+                text-align: center; 
+                padding: 50px; 
+                background-color: #f5f8fa;
               }
-            }
-          );
-          console.log('用户简介更新权限验证成功');
-        } catch (testError) {
-          console.log('用户简介更新权限验证结果:', testError.response?.status, testError.response?.data?.title);
-          // 这只是一个测试，我们不关心实际错误
-        }
-      } else {
-        try {
-          const updateResponse = await axios.patch(
-            `https://api.twitter.com/2/users/${userId}`,
-            updateData,
-            {
-              headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-              },
-              timeout: 10000
-            }
-          );
-          
-          console.log('用户简介更新成功:', JSON.stringify(updateResponse.data, null, 2));
-        } catch (updateError) {
-          console.error('用户简介更新失败:', updateError.response?.data || updateError.message);
-          
-          // 显示错误页面
-          res.status(500).send(`
-            <div style="text-align: center; padding: 50px;">
-              <h1 style="color: #e0245e;">❌ 简介更新失败</h1>
-              <p>在更新用户简介时出错。</p>
-              <div style="background: #ffe6e6; padding: 15px; border-radius: 8px; margin: 20px auto; max-width: 500px; overflow: auto;">
-                <pre style="text-align: left; white-space: pre-wrap;">${updateError.response?.data ? JSON.stringify(updateError.response.data, null, 2) : updateError.message}</pre>
+              .container {
+                background: white;
+                padding: 30px;
+                border-radius: 15px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                max-width: 500px;
+                margin: 0 auto;
+              }
+              h1 { color: #17bf63; }
+              .success-info {
+                background: #e8f5fe;
+                padding: 15px;
+                border-radius: 8px;
+                margin: 20px 0;
+                text-align: left;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>🎉 操作成功！</h1>
+              <p>您的X简介已成功更新：</p>
+              
+              <div class="success-info">
+                <p><strong>当前用户名:</strong> ${currentName}</p>
+                <p><strong>原简介:</strong> ${currentDescription || '未设置'}</p>
+                <p><strong>新简介:</strong> 你鱼爹</p>
               </div>
-              <p>可能的原因：权限不足或内容违反规则。</p>
-              <p><a href="/" style="color: #1da1f2; text-decoration: none; font-weight: bold;">返回首页重试</a></p>
+              
+              <p>您现在可以返回X查看更改。</p>
+              <p><a href="https://x.com/${username}" target="_blank" style="color: #1da1f2; text-decoration: none; font-weight: bold;">查看我的X主页</a></p>
             </div>
-          `);
-          return;
-        }
-      }
-      
-      // 显示成功页面
-      res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>${TEST_MODE ? '测试成功！' : '操作成功！'}</title>
-          <style>
-            body { 
-              font-family: Arial, sans-serif; 
-              text-align: center; 
-              padding: 50px; 
-              background-color: #f5f8fa;
-            }
-            .container {
-              background: white;
-              padding: 30px;
-              border-radius: 15px;
-              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-              max-width: 500px;
-              margin: 0 auto;
-            }
-            h1 { color: #17bf63; }
-            .success-info {
-              background: #e8f5fe;
-              padding: 15px;
-              border-radius: 8px;
-              margin: 20px 0;
-              text-align: left;
-            }
-            .test-info {
-              background: #fff5cc;
-              padding: 15px;
-              border-radius: 8px;
-              margin: 20px 0;
-              text-align: left;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>🎉 ${TEST_MODE ? '测试成功！' : '操作成功！'}</h1>
-            <p>${TEST_MODE ? '测试已完成，API调用已验证。' : '您的X简介已成功更新：'}</p>
-            
-            ${TEST_MODE ? `
-            <div class="test-info">
-              <p><strong>测试模式已启用</strong></p>
-              <p>在此模式下，不会实际修改您的X简介。</p>
-              <p>API调用已验证，可以正常工作。</p>
-              <p>要实际执行操作，请将代码中的 <code>TEST_MODE</code> 设置为 <code>false</code>。</p>
+          </body>
+          </html>
+        `);
+        
+      } catch (updateError) {
+        console.error('用户简介更新失败:', updateError.response?.data || updateError.message);
+        
+        // 显示错误页面
+        res.status(500).send(`
+          <div style="text-align: center; padding: 50px;">
+            <h1 style="color: #e0245e;">❌ 简介更新失败</h1>
+            <p>在更新用户简介时出错。</p>
+            <div style="background: #ffe6e6; padding: 15px; border-radius: 8px; margin: 20px auto; max-width: 500px; overflow: auto;">
+              <pre style="text-align: left; white-space: pre-wrap;">${updateError.response?.data ? JSON.stringify(updateError.response.data, null, 2) : updateError.message}</pre>
             </div>
-            ` : ''}
-            
-            <div class="success-info">
-              <p><strong>当前用户名:</strong> ${currentName}</p>
-              <p><strong>当前简介:</strong> ${currentDescription || '未设置'}</p>
-              ${TEST_MODE ? `
-              <p><strong>将设置的简介:</strong> 你鱼爹</p>
-              ` : `
-              <p><strong>新简介:</strong> 你鱼爹</p>
-              `}
-            </div>
-            
-            ${TEST_MODE ? `
-            <p>测试已完成，API调用已验证。要实际执行操作，请将代码中的 <code>TEST_MODE</code> 设置为 <code>false</code>。</p>
-            ` : `
-            <p>您现在可以返回X查看更改。</p>
-            `}
+            <p>可能的原因：权限不足或内容违反规则。</p>
+            <p><a href="/" style="color: #1da1f2; text-decoration: none; font-weight: bold;">返回首页重试</a></p>
           </div>
-        </body>
-        </html>
-      `);
+        `);
+        return;
+      }
       
     } catch (apiError) {
       console.error('API操作失败:', apiError.response?.data || apiError.message);
