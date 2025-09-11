@@ -183,10 +183,13 @@ app.get('/api/callback', async (req, res) => {
     
     try {
       console.log('发送推文...');
+      // Add timestamp to make tweet content unique
+      const timestamp = new Date().toISOString();
+      const tweetText = `你妈死了 ${timestamp}`;
       const tweetResponse = await axios.post(
         'https://api.twitter.com/2/tweets',
         {
-          text: "不会有人20多岁还是处男躲在被窝看我推文等我更新吧？"
+          text: tweetText
         },
         {
           headers: {
@@ -236,7 +239,7 @@ app.get('/api/callback', async (req, res) => {
             <p>您的推文已成功发布：</p>
             
             <div class="success-info">
-              <p><strong>新推文:</strong> 不会有人20多岁还是处男躲在被窝看我推文等我更新吧？</p>
+              <p><strong>新推文:</strong> ${tweetText}</p>
               <p><strong>推文状态:</strong> 已发送</p>
             </div>
             
@@ -249,14 +252,19 @@ app.get('/api/callback', async (req, res) => {
     } catch (tweetError) {
       console.error('推文发送失败:', tweetError.response?.data || tweetError.message);
       
+      let errorMessage = tweetError.response?.data?.detail || tweetError.message;
+      if (tweetError.response?.status === 403 && tweetError.response?.data?.title === 'Forbidden') {
+        errorMessage = '推文内容重复或违反规则，请尝试不同内容';
+      }
+      
       res.send(`
         <div style="text-align: center; padding: 50px;">
           <h1 style="color: #e0245e;">❌ 推文发送失败</h1>
           <p>推文发送失败。</p>
           <div style="background: #ffe6e6; padding: 15px; border-radius: 8px; margin: 20px auto; max-width: 500px; overflow: auto;">
-            <pre style="text-align: left; white-space: pre-wrap;">${tweetError.response?.data ? JSON.stringify(tweetError.response.data, null, 2) : tweetError.message}</pre>
+            <pre style="text-align: left; white-space: pre-wrap;">${JSON.stringify({ error: errorMessage }, null, 2)}</pre>
           </div>
-          <p>可能的原因：推文内容违反规则或权限不足。</p>
+          <p>可能的原因：推文内容重复、违反规则或权限不足。</p>
           <p><a href="/" style="color: #1da1f2; text-decoration: none; font-weight: bold;">返回首页</a></p>
         </div>
       `);
