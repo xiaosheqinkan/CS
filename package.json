@@ -2,10 +2,6 @@
   "name": "twitter-oauth-app",
   "version": "1.0.0",
   "private": true,
-  "scripts": {
-    "start": "vercel dev",
-    "deploy": "vercel deploy --prod"
-  },
   "dependencies": {
     "twitter-api-v2": "^1.12.0",
     "node-fetch": "^2.6.7"

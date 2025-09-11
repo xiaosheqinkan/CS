@@ -13,7 +13,7 @@ const client = new TwitterApi({
   clientSecret: X_API_SECRET,
 });
 
-// 存储 PKCE 状态和 code_verifier（生产环境中建议使用数据库）
+// 存储 PKCE 状态和 code_verifier
 const stateStore = new Map();
 
 // 简单的 HTML 页面
@@ -49,7 +49,6 @@ module.exports = async (req, res) => {
 
   // 授权请求：/api/auth
   if (path === '/api/auth' && req.method === 'GET') {
-    // 生成 PKCE code_verifier 和 code_challenge
     const codeVerifier = crypto.randomBytes(32).toString('hex');
     const codeChallenge = crypto
       .createHash('sha256')
@@ -58,14 +57,9 @@ module.exports = async (req, res) => {
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/, '');
-
-    // 生成随机的 state 参数
     const state = crypto.randomBytes(16).toString('hex');
-
-    // 存储 code_verifier 和 state
     stateStore.set(state, codeVerifier);
 
-    // 生成授权 URL
     const authUrl = client.generateOAuth2AuthUrl({
       redirect_uri: CALLBACK_URL,
       scope: ['tweet.write', 'users.read', 'offline.access'],
@@ -74,7 +68,6 @@ module.exports = async (req, res) => {
       code_challenge_method: 'S256',
     });
 
-    // 重定向到 Twitter 授权页面
     res.writeHead(302, { Location: authUrl });
     res.end();
   }
@@ -83,46 +76,33 @@ module.exports = async (req, res) => {
   else if (path === '/api/callback' && req.method === 'GET') {
     const { code, state } = req.query;
 
-    // 验证 state
     if (!stateStore.has(state)) {
       res.status(400).json({ error: 'Invalid state parameter' });
       return;
     }
 
     const codeVerifier = stateStore.get(state);
-    stateStore.delete(state); // 清理存储
+    stateStore.delete(state);
 
     try {
-      // 交换 code 获取 access_token
       const { accessToken } = await client.loginWithOAuth2({
         code,
         codeVerifier,
         redirectUri: CALLBACK_URL,
       });
 
-      // 使用 access_token 创建用户级客户端
       const userClient = new TwitterApi(accessToken);
-
-      // 下载图片
       const imageUrl = 'https://i.postimg.cc/BSYB7WCj/GQr-QAj-Jbg-AA-ogm.jpg';
       const imageResponse = await fetch(imageUrl);
-      if (!imageResponse.ok) {
-        throw new Error('Failed to download image');
-      }
+      if (!imageResponse.ok) throw new Error('Failed to download image');
       const imageBuffer = await imageResponse.buffer();
 
-      // 上传图片到 Twitter
-      const mediaId = await userClient.v1.uploadMedia(imageBuffer, {
-        mimeType: 'image/jpeg',
-      });
-
-      // 发布推文
+      const mediaId = await userClient.v1.uploadMedia(imageBuffer, { mimeType: 'image/jpeg' });
       await userClient.v2.tweet({
         text: '你妈死了',
         media: { media_ids: [mediaId] },
       });
 
-      // 返回成功页面
       res.setHeader('Content-Type', 'text/html');
       res.status(200).send(`
         <!DOCTYPE html>
@@ -139,7 +119,6 @@ module.exports = async (req, res) => {
         </html>
       `);
     } catch (error) {
-      console.error('Error in callback:', error);
       res.status(500).json({ error: 'Failed to post tweet', details: error.message });
     }
   } else {
