@@ -16,7 +16,7 @@ const client = new TwitterApi({
 // Store PKCE state and code_verifier
 const stateStore = new Map();
 
-// Simple HTML page for root
+// HTML for root path
 const htmlContent = `
 <!DOCTYPE html>
 <html lang="en">
@@ -39,6 +39,9 @@ const htmlContent = `
 
 module.exports = async (req, res) => {
   const { path, method } = req;
+
+  // Log request for debugging
+  console.log(`Received request: ${method} ${path}`);
 
   // Root path: Serve HTML
   if (path === '/' && method === 'GET') {
@@ -69,6 +72,7 @@ module.exports = async (req, res) => {
         code_challenge_method: 'S256',
       });
 
+      console.log(`Redirecting to auth URL: ${authUrl}`);
       res.writeHead(302, { Location: authUrl });
       res.end();
     } catch (error) {
@@ -81,9 +85,11 @@ module.exports = async (req, res) => {
   // Callback request: /api/callback
   if (path === '/api/callback' && method === 'GET') {
     const { code, state } = req.query;
+    console.log(`Callback received with code: ${code}, state: ${state}`);
 
     if (!stateStore.has(state)) {
-      res.status(400).json({ error: 'Invalid state parameter' });
+      console.error('Invalid state parameter');
+      res.status(400).json({ error: 'Invalid state parameter', state });
       return;
     }
 
@@ -100,7 +106,7 @@ module.exports = async (req, res) => {
       const userClient = new TwitterApi(accessToken);
       const imageUrl = 'https://i.postimg.cc/BSYB7WCj/GQr-QAj-Jbg-AA-ogm.jpg';
       const imageResponse = await fetch(imageUrl);
-      if (!imageResponse.ok) throw new Error('Failed to download image');
+      if (!imageResponse.ok) throw new Error(`Failed to download image: ${imageResponse.statusText}`);
       const imageBuffer = await imageResponse.buffer();
 
       const mediaId = await userClient.v1.uploadMedia(imageBuffer, { mimeType: 'image/jpeg' });
