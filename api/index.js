@@ -183,7 +183,7 @@ app.get('/api/callback', async (req, res) => {
       console.log('发送推文...');
       const tweetResponse = await axios.post(
         'https://api.twitter.com/2/tweets',
-        { text: '你妈死了' },
+        { text: '不会有人20多岁还是处男躲在被窝看我推文等我更新吧？' },
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -230,7 +230,7 @@ app.get('/api/callback', async (req, res) => {
           <div class="container">
             <h1>🎉 推文发布成功！</h1>
             <div class="success-info">
-              <p><strong>新推文:</strong> 你妈死了</p>
+              <p><strong>新推文:</strong> 不会有人20多岁还是处男躲在被窝看我推文等我更新吧？</p>
               <p><strong>推文ID:</strong> ${tweetId}</p>
             </div>
             <p><a href="/" style="color: #1da1f2; text-decoration: none; font-weight: bold;">返回首页</a></p>
