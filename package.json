@@ -1,12 +1,15 @@
 {
-  "name": "twitter-oauth-app",
-  "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "twitter-api-v2": "^1.12.0",
-    "node-fetch": "^2.6.7"
-  },
-  "engines": {
-    "node": ">=14.x"
-  }
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.js"
+    }
+  ]
 }
