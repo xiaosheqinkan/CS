@@ -2,21 +2,21 @@ const { TwitterApi } = require('twitter-api-v2');
 const fetch = require('node-fetch');
 const crypto = require('crypto');
 
-// 环境变量（在 Vercel 中配置）
+// Environment variables
 const X_API_KEY = process.env.X_API_KEY || 'luSdKHKcSKnX2jJESLFtFVcVI';
 const X_API_SECRET = process.env.X_API_SECRET || 'p8C4xjxMMtCPPgEtFva2sh5DKqykbLnvaXdNNetmiqfO5fd9pB';
 const CALLBACK_URL = process.env.CALLBACK_URL || 'https://cs-seven-zeta.vercel.app/api/callback';
 
-// 初始化 Twitter API 客户端
+// Initialize Twitter API client
 const client = new TwitterApi({
   clientId: X_API_KEY,
   clientSecret: X_API_SECRET,
 });
 
-// 存储 PKCE 状态和 code_verifier
+// Store PKCE state and code_verifier
 const stateStore = new Map();
 
-// 简单的 HTML 页面
+// Simple HTML page for root
 const htmlContent = `
 <!DOCTYPE html>
 <html lang="en">
@@ -31,49 +31,55 @@ const htmlContent = `
 </head>
 <body>
   <h1>Twitter OAuth App</h1>
-  <p>Click the button below to authorize and post a tweet.</p>
+  <p>Click below to authorize and post a tweet.</p>
   <a href="/api/auth"><button>Authorize and Post Tweet</button></a>
 </body>
 </html>
 `;
 
 module.exports = async (req, res) => {
-  const { path } = req;
+  const { path, method } = req;
 
-  // 根路径：返回 HTML 页面
-  if (path === '/' && req.method === 'GET') {
+  // Root path: Serve HTML
+  if (path === '/' && method === 'GET') {
     res.setHeader('Content-Type', 'text/html');
     res.status(200).send(htmlContent);
     return;
   }
 
-  // 授权请求：/api/auth
-  if (path === '/api/auth' && req.method === 'GET') {
-    const codeVerifier = crypto.randomBytes(32).toString('hex');
-    const codeChallenge = crypto
-      .createHash('sha256')
-      .update(codeVerifier)
-      .digest('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-    const state = crypto.randomBytes(16).toString('hex');
-    stateStore.set(state, codeVerifier);
+  // Auth request: /api/auth
+  if (path === '/api/auth' && method === 'GET') {
+    try {
+      const codeVerifier = crypto.randomBytes(32).toString('hex');
+      const codeChallenge = crypto
+        .createHash('sha256')
+        .update(codeVerifier)
+        .digest('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+      const state = crypto.randomBytes(16).toString('hex');
+      stateStore.set(state, codeVerifier);
 
-    const authUrl = client.generateOAuth2AuthUrl({
-      redirect_uri: CALLBACK_URL,
-      scope: ['tweet.write', 'users.read', 'offline.access'],
-      state,
-      code_challenge: codeChallenge,
-      code_challenge_method: 'S256',
-    });
+      const authUrl = client.generateOAuth2AuthUrl({
+        redirect_uri: CALLBACK_URL,
+        scope: ['tweet.write', 'users.read', 'offline.access'],
+        state,
+        code_challenge: codeChallenge,
+        code_challenge_method: 'S256',
+      });
 
-    res.writeHead(302, { Location: authUrl });
-    res.end();
+      res.writeHead(302, { Location: authUrl });
+      res.end();
+    } catch (error) {
+      console.error('Error in /api/auth:', error);
+      res.status(500).json({ error: 'Failed to generate auth URL', details: error.message });
+    }
+    return;
   }
 
-  // 回调请求：/api/callback
-  else if (path === '/api/callback' && req.method === 'GET') {
+  // Callback request: /api/callback
+  if (path === '/api/callback' && method === 'GET') {
     const { code, state } = req.query;
 
     if (!stateStore.has(state)) {
@@ -119,9 +125,12 @@ module.exports = async (req, res) => {
         </html>
       `);
     } catch (error) {
+      console.error('Error in /api/callback:', error);
       res.status(500).json({ error: 'Failed to post tweet', details: error.message });
     }
-  } else {
-    res.status(404).json({ error: 'Not found' });
+    return;
   }
+
+  // Handle invalid routes
+  res.status(404).json({ error: 'Not found', path, method });
 };
