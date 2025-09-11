@@ -1,10 +1,15 @@
 {
   "name": "x-app",
   "version": "1.0.0",
-  "description": "My X App for automation",
+  "description": "My X App for changing profile pictures",
+  "main": "api/index.js",
+  "scripts": {
+    "start": "node api/index.js"
+  },
   "dependencies": {
     "express": "^4.18.2",
-    "axios": "^1.6.0"
+    "axios": "^1.6.0",
+    "querystring": "^0.2.1"
   },
   "engines": {
     "node": "22.x"
