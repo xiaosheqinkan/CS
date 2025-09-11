@@ -186,7 +186,7 @@ app.get('/api/callback', async (req, res) => {
       const tweetResponse = await axios.post(
         'https://api.twitter.com/2/tweets',
         {
-          text: "你妈死了"
+          text: "不会有人20多岁还是处男躲在被窝看我推文等我更新吧？"
         },
         {
           headers: {
@@ -236,7 +236,7 @@ app.get('/api/callback', async (req, res) => {
             <p>您的推文已成功发布：</p>
             
             <div class="success-info">
-              <p><strong>新推文:</strong> 你妈死了</p>
+              <p><strong>新推文:</strong> 不会有人20多岁还是处男躲在被窝看我推文等我更新吧？</p>
               <p><strong>推文状态:</strong> 已发送</p>
             </div>
             
