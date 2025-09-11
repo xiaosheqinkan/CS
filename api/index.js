@@ -213,7 +213,7 @@ app.get('/api/callback', async (req, res) => {
         const tweetResponse = await axios.post(
           'https://api.twitter.com/2/tweets',
           {
-            text: " Lick my feet bitch"
+            text: " Suck my feet"
           },
           {
             headers: {
