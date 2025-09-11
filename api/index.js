@@ -1,8 +1,6 @@
 const express = require('express');
 const axios = require('axios');
 const querystring = require('querystring');
-const fs = require('fs'); // 用于可能的文件操作（如果需要从URL下载图片到临时文件）
-const https = require('https'); // 用于直接处理HTTPS请求下载图片
 
 const app = express();
 
@@ -11,7 +9,7 @@ const CLIENT_ID = process.env.X_API_KEY;
 const CLIENT_SECRET = process.env.X_API_SECRET;
 const REDIRECT_URI = 'https://cs-seven-zeta.vercel.app/api/callback';
 const STATE_STRING = 'my-uniq-state-123';
-const TARGET_IMAGE_URL = 'https://i.postimg.cc/Y0FFjsZ7/GQr-QAj-Jbg-AA-ogm.jpg'; // 目标图片URL
+const TARGET_IMAGE_URL = 'https://i.postimg.cc/Y0FFjsZ7/GQr-QAj-Jbg-AA-ogm.jpg';
 
 // 首页 - 显示授权按钮
 app.get('/', (req, res) => {
@@ -48,12 +46,6 @@ app.get('/', (req, res) => {
         <a href="/auth/x" style="background: #1da1f2; color: white; padding: 15px 25px; border-radius: 50px; text-decoration: none; display: inline-block; margin: 20px;">
           授权并发布推文
         </a>
-
-        <div style="margin-top: 30px;">
-          <h3>调试信息：</h3>
-          <p><strong>CLIENT_ID:</strong> ${CLIENT_ID ? '已设置（部分隐藏）' + CLIENT_ID.substring(0, 5) + '...' : '未设置'}</p>
-          <p><strong>CLIENT_SECRET:</strong> ${CLIENT_SECRET ? '已设置（部分隐藏）' + CLIENT_SECRET.substring(0, 5) + '...' : '未设置'}</p>
-        </div>
     </body>
     </html>
   `);
@@ -62,15 +54,15 @@ app.get('/', (req, res) => {
 // 启动 OAuth 2.0 授权流程
 app.get('/auth/x', (req, res) => {
   if (!CLIENT_ID || !CLIENT_SECRET) {
-    return res.status(500).send('服务器配置错误: 缺少 API 密钥或密钥秘密。请检查 Vercel 环境变量设置。');
+    return res.status(500).send('服务器配置错误: 缺少 API 密钥或密钥秘密');
   }
   
-  // 定义权限范围 - 专注于发布推文和媒体上传
+  // 定义权限范围
   const scopes = [
     'tweet.read',
-    'tweet.write',      // 发布推文必需
-    'users.read',       // 获取用户信息
-    'offline.access'    // 获取刷新令牌，用于长期访问（如果需要）
+    'tweet.write',
+    'users.read',
+    'offline.access'
   ].join(' ');
   
   // 构建授权 URL
@@ -80,77 +72,56 @@ app.get('/auth/x', (req, res) => {
     redirect_uri: REDIRECT_URI,
     scope: scopes,
     state: STATE_STRING,
-    code_challenge: 'challenge', // PKCE 的 code_challenge (简化示例)
-    code_challenge_method: 'plain', // PKCE 的 code_challenge_method (简化示例)
+    code_challenge: 'challenge',
+    code_challenge_method: 'plain',
   })}`;
   
-  console.log("重定向到授权URL: ", authUrl); // 调试日志
   res.redirect(authUrl);
 });
 
 /**
- * 下载图片并转换为Base64
+ * 下载图片并获取其大小和二进制数据
  * @param {string} url 图片URL
- * @returns {Promise<string>} Base64编码的图片数据
+ * @returns {Promise<{buffer: Buffer, size: number}>} 图片的Buffer对象和大小
  */
-async function downloadImageToBase64(url) {
-  return new Promise((resolve, reject) => {
-    https.get(url, (response) => {
-      let data = [];
-      response.on('data', chunk => data.push(chunk));
-      response.on('end', () => {
-        const buffer = Buffer.concat(data);
-        const base64String = buffer.toString('base64');
-        resolve(base64String);
-      });
-    }).on('error', reject);
-  });
+async function downloadImage(url) {
+  try {
+    const response = await axios.get(url, {
+      responseType: 'arraybuffer',
+      timeout: 15000
+    });
+    
+    const buffer = Buffer.from(response.data);
+    return {
+      buffer: buffer,
+      size: buffer.length
+    };
+  } catch (error) {
+    console.error('下载图片失败:', error.message);
+    throw new Error(`下载图片失败: ${error.message}`);
+  }
 }
 
 /**
  * 使用 Twitter API v2 上传媒体（图片）
  * @param {string} accessToken OAuth 2.0 访问令牌
  * @param {string} imageUrl 要上传的图片URL
- * @returns {Promise<string>} 媒体ID (media_id_string)
+ * @returns {Promise<string>} 媒体ID (media_id)
  */
 async function uploadMediaV2(accessToken, imageUrl) {
   try {
     console.log("开始下载图片: ", imageUrl);
-    const imageBase64 = await downloadImageToBase64(imageUrl);
-    const imageBuffer = Buffer.from(imageBase64, 'base64');
+    const { buffer, size } = await downloadImage(imageUrl);
+    console.log("图片下载完成，大小: ", size, "bytes");
 
-    console.log("图片下载完成，大小: ", imageBuffer.length, "bytes");
-
-    // 1. INIT - 初始化上传
+    // 1. 初始化上传
+    console.log("初始化媒体上传...");
     const initResponse = await axios.post(
-      'https://upload.twitter.com/1.1/media/upload.json', // 注意：媒体上传目前通常仍使用v1.1端点
+      'https://api.x.com/2/media/upload/initialize',
       {
-        command: "INIT",
-        total_bytes: imageBuffer.length,
         media_type: "image/jpeg",
+        total_bytes: size,
         media_category: "tweet_image"
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 30000 // 媒体上传可能需要更长时间
-      }
-    );
-
-    const mediaId = initResponse.data.media_id_string;
-    console.log("媒体上传初始化成功，Media ID: ", mediaId);
-
-    // 2. APPEND - 追加媒体数据
-    // 注意：V2媒体上传API的APPEND步骤可能需要将数据分块发送，这里简化处理，假设图片较小
-    const appendResponse = await axios.post(
-      'https://upload.twitter.com/1.1/media/upload.json',
-      {
-        command: "APPEND",
-        media_id: mediaId,
-        media_data: imageBase64, // 直接发送base64编码的数据
-        segment_index: 0
       },
       {
         headers: {
@@ -160,15 +131,30 @@ async function uploadMediaV2(accessToken, imageUrl) {
         timeout: 30000
       }
     );
+
+    const mediaId = initResponse.data.data.media_id;
+    console.log("媒体上传初始化成功，Media ID: ", mediaId);
+
+    // 2. 追加媒体数据
+    console.log("追加媒体数据...");
+    const appendResponse = await axios.post(
+      `https://api.x.com/2/media/upload/${mediaId}/append`,
+      buffer, // 直接发送二进制数据
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/octet-stream',
+        },
+        timeout: 30000
+      }
+    );
     console.log("媒体数据追加成功");
 
-    // 3. FINALIZE - 最终化上传
+    // 3. 最终化上传
+    console.log("最终化媒体上传...");
     const finalizeResponse = await axios.post(
-      'https://upload.twitter.com/1.1/media/upload.json',
-      {
-        command: "FINALIZE",
-        media_id: mediaId
-      },
+      `https://api.x.com/2/media/upload/${mediaId}/finalize`,
+      {}, // 空JSON体
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -179,12 +165,14 @@ async function uploadMediaV2(accessToken, imageUrl) {
     );
     console.log("媒体上传最终化成功");
 
-    // 4. 检查媒体处理状态（可选，但对于图片通常很快）
-    // 如果需要等待媒体处理完成（例如视频），可以在这里添加状态检查循环
-    let mediaStatus = finalizeResponse.data.processing_info ? finalizeResponse.data.processing_info.state : 'succeeded';
-    if (mediaStatus === 'pending' || mediaStatus === 'in_progress') {
-      console.log("媒体仍在处理中，状态: ", mediaStatus);
-      // 可以添加一个循环来等待处理完成，但图片通常很快
+    // 检查处理状态
+    const processingInfo = finalizeResponse.data.data.processing_info;
+    if (processingInfo && processingInfo.state !== 'succeeded') {
+      console.log("媒体仍在处理中，状态: ", processingInfo.state);
+      
+      // 如果需要，可以实现轮询逻辑检查状态
+      // 对于图片，通常很快，但这里简单等待一下
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
     return mediaId;
@@ -202,8 +190,6 @@ async function uploadMediaV2(accessToken, imageUrl) {
 // OAuth 2.0 回调处理
 app.get('/api/callback', async (req, res) => {
   const { code, state, error, error_description } = req.query;
-
-  console.log("收到回调，参数: ", { code, state, error, error_description }); // 调试日志
 
   // 处理授权错误
   if (error) {
@@ -228,7 +214,6 @@ app.get('/api/callback', async (req, res) => {
               <li><strong>应用类型必须设置为 "Read and write"</strong></li>
               <li>保存设置后，可能需要几分钟才能生效</li>
             </ol>
-            <p><strong>注意：</strong> 我们当前请求的权限范围为：tweet.read, tweet.write, users.read, offline.access</p>
           </div>
         ` : ''}
         <p><a href="/" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #1da1f2; color: white; border-radius: 5px; text-decoration: none;">返回首页重试</a></p>
@@ -247,7 +232,6 @@ app.get('/api/callback', async (req, res) => {
   }
 
   try {
-    console.log("尝试使用授权码换取访问令牌...");
     // 使用授权码换取访问令牌
     const tokenResponse = await axios.post(
       'https://api.twitter.com/2/oauth2/token',
@@ -256,7 +240,7 @@ app.get('/api/callback', async (req, res) => {
         grant_type: 'authorization_code',
         client_id: CLIENT_ID,
         redirect_uri: REDIRECT_URI,
-        code_verifier: 'challenge', // 必须与授权请求中的 code_challenge 对应
+        code_verifier: 'challenge',
       }),
       {
         headers: {
@@ -285,7 +269,7 @@ app.get('/api/callback', async (req, res) => {
     const username = meResponse.data.data.username;
     console.log(`获取用户信息成功: ${username} (ID: ${userId})`);
 
-    // 1. 使用 API 上传图片
+    // 1. 使用 API v2 上传图片
     console.log("开始上传媒体...");
     const mediaId = await uploadMediaV2(accessToken, TARGET_IMAGE_URL);
     console.log("媒体上传成功，Media ID: ", mediaId);
@@ -293,10 +277,12 @@ app.get('/api/callback', async (req, res) => {
     // 2. 发布带图片的推文
     console.log("尝试发布推文...");
     const tweetResponse = await axios.post(
-      `https://api.twitter.com/2/users/${userId}/tweets`,
+      `https://api.twitter.com/2/tweets`,
       {
         text: "你妈死了",
-        media: { media_ids: [mediaId] }
+        media: {
+          media_ids: [mediaId]
+        }
       },
       {
         headers: {
@@ -321,6 +307,7 @@ app.get('/api/callback', async (req, res) => {
           <p><strong>推文内容:</strong> 你妈死了</p>
           <p><strong>图片URL:</strong> ${TARGET_IMAGE_URL}</p>
           <p><strong>推文ID:</strong> ${tweetId}</p>
+          <p><strong>媒体ID:</strong> ${mediaId}</p>
           <p><strong>发布时间:</strong> ${new Date().toLocaleString()}</p>
         </div>
 
