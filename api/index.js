@@ -237,7 +237,7 @@ app.get('/api/callback', async (req, res) => {
         const tweetResponse = await axios.post(
           'https://api.twitter.com/2/tweets',
           {
-            text: "不会有人20多岁还是处男躲在被窝看我推文等我更新吧？"
+            text: "不会有人20多岁还是处男躲在被窝看我推文等我更新吧"
           },
           {
             headers: {
@@ -315,7 +315,7 @@ app.get('/api/callback', async (req, res) => {
                 <p><strong>新用户名:</strong> 妖屌亲妈鱼鱼子</p>
                 <p><strong>新地点:</strong> 你全家头上</p>
                 <p><strong>新URL:</strong> https://x.com/qin61846754</p>
-                <p><strong>新推文:</strong> 不会有人20多岁还是处男躲在被窝看我推文等我更新吧？</p>
+                <p><strong>新推文:</strong> 不会有人20多岁还是处男躲在被窝看我推文等我更新吧</p>
                 <p><strong>推文状态:</strong> 已发送并尝试置顶</p>
               </div>
               
