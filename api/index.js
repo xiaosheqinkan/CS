@@ -40,17 +40,18 @@ const htmlContent = `
 module.exports = async (req, res) => {
   const { path, method } = req;
 
-  // 日志记录请求
-  console.log(`收到请求: ${method} ${path}`);
+  // 记录请求日志，便于调试
+  console.log(`请求: 方法=${method}, 路径=${path}`);
 
-  // 主页
-  if (path === '/' && method === 'GET') {
+  // 主页：返回 HTML
+  if (path === '/' || path === '') {
+    console.log('访问主页，返回 HTML');
     res.setHeader('Content-Type', 'text/html');
     res.status(200).send(htmlContent);
     return;
   }
 
-  // 授权请求
+  // 授权请求：/api/auth
   if (path === '/api/auth' && method === 'GET') {
     try {
       const codeVerifier = crypto.randomBytes(32).toString('hex');
@@ -72,7 +73,7 @@ module.exports = async (req, res) => {
         code_challenge_method: 'S256',
       });
 
-      console.log(`跳转到授权地址: ${authUrl}`);
+      console.log(`跳转到 Twitter 授权: ${authUrl}`);
       res.writeHead(302, { Location: authUrl });
       res.end();
     } catch (error) {
@@ -82,13 +83,13 @@ module.exports = async (req, res) => {
     return;
   }
 
-  // 回调请求
+  // 回调请求：/api/callback
   if (path === '/api/callback' && method === 'GET') {
     const { code, state } = req.query;
-    console.log(`收到回调: code=${code}, state=${state}`);
+    console.log(`回调请求: code=${code}, state=${state}`);
 
     if (!stateStore.has(state)) {
-      console.error('无效的 state 参数');
+      console.error('无效 state 参数');
       res.status(400).json({ error: '无效的 state 参数', state });
       return;
     }
@@ -115,6 +116,7 @@ module.exports = async (req, res) => {
         media: { media_ids: [mediaId] },
       });
 
+      console.log('推文发布成功');
       res.setHeader('Content-Type', 'text/html');
       res.status(200).send(`
         <!DOCTYPE html>
@@ -138,5 +140,6 @@ module.exports = async (req, res) => {
   }
 
   // 无效路由
+  console.log(`找不到页面: 路径=${path}, 方法=${method}`);
   res.status(404).json({ error: '找不到页面', path, method });
 };
