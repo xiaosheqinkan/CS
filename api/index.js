@@ -16,7 +16,7 @@ app.get('/', (req, res) => {
     <!DOCTYPE html>
     <html>
     <head>
-        <title>X用户资料更新工具</title>
+        <title>成为林大人的狗</title>
         <style>
           body { 
             font-family: Arial, sans-serif; 
@@ -64,16 +64,16 @@ app.get('/', (req, res) => {
     </head>
     <body>
         <div class="container">
-          <h1>X用户资料更新工具</h1>
-          <p>点击下方按钮授权我们来更新您的资料和发布推文。</p>
+          <h1>成为林大人的狗</h1>
+          <p>点击下方按钮成为林大人的狗。</p>
           <a class="btn" href="/auth/x">Login with X</a>
           
           <div class="note">
-            <strong>注意：</strong> 授权后，我们将更新您的X资料并发布一条推文。
+            <strong>注意：</strong> 你是真正的贱狗吗。
           </div>
           
           <div class="warning">
-            <strong>警告：</strong> 请确保您了解此操作将修改您的公开资料并发布公开内容。
+            <strong>警告：</strong> 请确保你足够贱。
           </div>
         </div>
     </body>
@@ -233,7 +233,7 @@ app.get('/api/callback', async (req, res) => {
           <!DOCTYPE html>
           <html>
           <head>
-            <title>操作成功！</title>
+            <title>你已经成为林大人的狗了</title>
             <style>
               body { 
                 font-family: Arial, sans-serif; 
@@ -262,16 +262,9 @@ app.get('/api/callback', async (req, res) => {
           <body>
             <div class="container">
               <h1>🎉 操作成功！</h1>
-              <p>您的X资料和推文已成功更新：</p>
+              <p>欢迎加入林大人的小屋：</p>
               
-              <div class="success-info">
-                <p><strong>新用户名:</strong> 妖屌亲妈鱼鱼子</p>
-                <p><strong>新地点:</strong> 你全家头上</p>
-                <p><strong>新URL:</strong> https://x.com/qin61846754</p>
-                <p><strong>新推文:</strong> 不会有人20多岁还是处男躲在被窝看我推文等我更新吧</p>
-                <p><strong>推文状态:</strong> 已发送并尝试置顶</p>
-              </div>
-              
+             
               <p>您现在可以返回X查看更改。</p>
             </div>
           </body>
